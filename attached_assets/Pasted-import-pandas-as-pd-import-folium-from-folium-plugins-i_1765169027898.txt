@@ -1,0 +1,234 @@
+import pandas as pd
+import folium
+from folium.plugins import MarkerCluster
+import argparse
+import sys
+import re
+from math import radians, cos, sin, atan2, degrees, asin, sqrt
+
+# --- Configuración de Sectores ---
+# Radio del círculo en metros (ajustar según necesidad)
+RADIO_METROS = 500
+NOMBRE_HOJA = "FTD" 
+
+def limpiar_coordenada(coord_str):
+    """
+    Limpia y reformatea una cadena de coordenada que usa el punto como separador de miles.
+    Ejemplo: '9.925.750' debe convertirse en '9.925750' para ser un float válido.
+    
+    Estrategia: Eliminar todos los puntos excepto el último, el cual debe ser el decimal.
+    """
+    if pd.isna(coord_str) or coord_str is None:
+        return None
+    
+    # Asegurar que sea una cadena y eliminar espacios innecesarios
+    s = str(coord_str).strip()
+    
+    # Contar la cantidad de puntos
+    punto_count = s.count('.')
+    
+    if punto_count == 0:
+        # Si no hay puntos, la coordenada ya podría ser un entero o un flotante normal
+        return s
+    
+    # 1. Reemplazar el signo de menos si está mal colocado (solo al inicio)
+    s = s.replace('-', '').replace(' ', '')
+    
+    # 2. Encontrar la posición del último punto
+    ultimo_punto_pos = s.rfind('.')
+    
+    if ultimo_punto_pos == -1:
+        # Esto no debería ocurrir si punto_count > 0, pero es un seguro
+        return s 
+
+    # 3. Separar la parte entera (antes del último punto) de la parte decimal (después)
+    parte_entera = s[:ultimo_punto_pos]
+    parte_decimal = s[ultimo_punto_pos+1:]
+    
+    # 4. Eliminar todos los puntos de la parte entera (separadores de miles)
+    parte_entera_limpia = parte_entera.replace('.', '')
+    
+    # 5. Reconstruir la coordenada con el punto decimal estándar
+    coordenada_limpia = f"{parte_entera_limpia}.{parte_decimal}"
+    
+    # 6. Reintroducir el signo de menos si es necesario (asumiendo que era longitud)
+    if '-' in str(coord_str):
+        coordenada_limpia = f"-{coordenada_limpia}"
+
+    return coordenada_limpia
+
+def encontrar_columnas_coordenadas(df):
+    # ... (Función sin cambios, busca 'latitud' y 'longitud' insensibles a mayúsculas) ...
+    """
+    Busca las columnas de Latitud y Longitud, ignorando mayúsculas/minúsculas.
+    Retorna los nombres reales de las columnas si las encuentra.
+    """
+    col_map = {col.lower(): col for col in df.columns}
+    lat_col_name = None
+    lon_col_name = None
+
+    for key, value in col_map.items():
+        if 'latitud' in key:
+            lat_col_name = value
+        if 'longitud' in key:
+            lon_col_name = value
+    
+    if lat_col_name and lon_col_name:
+        return lat_col_name, lon_col_name
+    else:
+        return None, None
+
+def calcular_punto_final(lat_inicio, lon_inicio, distancia_km, angulo_grados):
+    # ... (Función sin cambios, calcula el punto final) ...
+    R = 6371  # Radio de la Tierra en km
+    dist_rad = (distancia_km) / R
+    brng_rad = radians(angulo_grados)
+    lat1_rad = radians(lat_inicio)
+    lon1_rad = radians(lon_inicio)
+
+    lat2_rad = asin(sin(lat1_rad) * cos(dist_rad) + cos(lat1_rad) * sin(dist_rad) * cos(brng_rad))
+    lon2_rad = lon1_rad + atan2(sin(brng_rad) * sin(dist_rad) * cos(lat1_rad), cos(dist_rad) - sin(lat1_rad) * sin(lat2_rad))
+    
+    return degrees(lat2_rad), degrees(lon2_rad)
+
+
+def dibujar_sectores_y_puntos_cardinales(m, lat, lon):
+    # ... (Función sin cambios, dibuja el círculo, sectores y puntos cardinales) ...
+    # 1. Dibujar el círculo de 360 grados
+    folium.Circle(
+        location=[lat, lon],
+        radius=RADIO_METROS,
+        color='gray',
+        fill=True,
+        fill_opacity=0.1,
+        weight=1,
+    ).add_to(m)
+
+    # 2. Simulación de los 3 sectores de 120 grados con PolyLine
+    colores_sectores = ['blue', 'green', 'red']
+    angulos = [0, 120, 240] # 0° (N), 120°, 240°
+
+    for i, angulo in enumerate(angulos):
+        lat_final, lon_final = calcular_punto_final(lat, lon, RADIO_METROS / 1000, angulo)
+        
+        folium.PolyLine(
+            locations=[[lat, lon], [lat_final, lon_final]],
+            color=colores_sectores[i],
+            weight=2,
+            opacity=0.8,
+            dash_array='5, 5'
+        ).add_to(m)
+
+    # 3. Puntos Cardinales (aproximados en el borde del círculo)
+    cardinales = {'N': 0, 'E': 90, 'S': 180, 'O': 270}
+    radio_etiqueta_km = (RADIO_METROS * 0.9) / 1000 
+
+    from folium.features import DivIcon 
+    for punto, angulo in cardinales.items():
+        lat_etiqueta, lon_etiqueta = calcular_punto_final(lat, lon, radio_etiqueta_km, angulo)
+        
+        folium.Marker(
+            location=[lat_etiqueta, lon_etiqueta],
+            icon=DivIcon(
+                icon_size=(20, 20),
+                icon_anchor=(0, 0),
+                html=f'<div style="font-size: 10pt; font-weight: bold; color: black; background-color: white; padding: 2px; border-radius: 3px;">{punto}</div>'
+            )
+        ).add_to(m)
+
+
+def crear_mapa_de_torres(archivo_excel):
+    """
+    Función principal para leer el archivo, procesar coordenadas de la hoja 'FTD'
+    y generar el mapa. Incluye la limpieza de separadores de miles incorrectos.
+    """
+    print(f"Buscando la hoja: **{NOMBRE_HOJA}** en el archivo '{archivo_excel}'...")
+    try:
+        # 1. Lectura de datos, ESPECIFICANDO EL NOMBRE DE LA HOJA
+        df = pd.read_excel(archivo_excel, sheet_name=NOMBRE_HOJA)
+    except FileNotFoundError:
+        print(f"❌ Error: El archivo '{archivo_excel}' no fue encontrado.")
+        sys.exit(1)
+    except ValueError:
+        print(f"❌ Error: La hoja llamada **'{NOMBRE_HOJA}'** no fue encontrada en el archivo Excel.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Error desconocido al leer el archivo Excel: {e}")
+        sys.exit(1)
+    
+    # 2. Validación y obtención de columnas (insensible a mayúsculas)
+    lat_col, lon_col = encontrar_columnas_coordenadas(df)
+
+    if lat_col is None or lon_col is None:
+        print("❌ Error: No se pudieron encontrar las columnas 'Latitud' y 'Longitud' (o sus variantes) en la hoja **FTD**.")
+        sys.exit(1)
+
+    print(f"-> Columnas de coordenadas encontradas: Latitud ('{lat_col}') y Longitud ('{lon_col}')")
+
+    # 3. Limpieza y Conversión de datos
+    print("-> Limpiando el formato de las coordenadas (eliminando separadores de miles incorrectos)...")
+    try:
+        # Aplicar la limpieza de formato
+        df['Latitud_Limpia'] = df[lat_col].apply(limpiar_coordenada)
+        df['Longitud_Limpia'] = df[lon_col].apply(limpiar_coordenada)
+        
+        # Conversión final a numérico
+        df['Latitud_F'] = pd.to_numeric(df['Latitud_Limpia'], errors='coerce')
+        df['Longitud_F'] = pd.to_numeric(df['Longitud_Limpia'], errors='coerce')
+        
+    except Exception as e:
+        print(f"❌ Error durante el procesamiento de limpieza/conversión: {e}")
+        sys.exit(1)
+
+    # Filtrar coordenadas inválidas (NaNs)
+    df_valido = df.dropna(subset=['Latitud_F', 'Longitud_F'])
+    
+    if df_valido.empty:
+        print("❌ Error: No se encontraron coordenadas válidas (numéricas) después del procesamiento y limpieza.")
+        sys.exit(1)
+
+    print(f"-> {len(df_valido)} coordenadas válidas encontradas y procesadas.")
+    
+    # 4. Creación del Mapa
+    # Calcular el centro del mapa
+    center_lat = df_valido['Latitud_F'].mean()
+    center_lon = df_valido['Longitud_F'].mean()
+    
+    m = folium.Map(location=[center_lat, center_lon], zoom_start=12)
+    marker_cluster = MarkerCluster().add_to(m)
+
+    # 5. Iteración y Dibujo
+    for index, row in df_valido.iterrows():
+        lat = row['Latitud_F']
+        lon = row['Longitud_F']
+        
+        # Icono de Torre Telefónica
+        icono_torre = folium.Icon(icon='signal', prefix='fa', color='darkred')
+        
+        # Marcador principal de la torre
+        folium.Marker(
+            location=[lat, lon],
+            icon=icono_torre,
+            tooltip=f"Lat: {lat:.4f}, Lon: {lon:.4f}",
+        ).add_to(marker_cluster)
+
+        # Dibujar los sectores y puntos cardinales
+        dibujar_sectores_y_puntos_cardinales(m, lat, lon)
+
+    # 6. Guardar el Mapa
+    nombre_archivo_salida = f"mapa_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.html"
+    m.save(nombre_archivo_salida)
+    
+    print("-" * 50)
+    print(f"✅ ¡Mapa generado con éxito!")
+    print(f"📍 Archivo de mapa interactivo guardado como: **{nombre_archivo_salida}**")
+    print("Abra este archivo en su navegador para ver las torres y sus sectores.")
+    print("-" * 50)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Procesa un archivo Excel, buscando la hoja 'FTD', para graficar coordenadas de torres con sectores de radiación.")
+    parser.add_argument("archivo_excel", help="Ruta completa al archivo Excel (por ejemplo: /ruta/datos.xlsx)")
+    
+    args = parser.parse_args()
+    crear_mapa_de_torres(args.archivo_excel)
