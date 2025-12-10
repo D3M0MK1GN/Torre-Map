@@ -3,6 +3,13 @@
 ## Descripción
 Sistema completo para crear y editar mapas de inteligencia con ubicaciones de torres telefónicas. Incluye modo de creación rápida y modo de edición avanzada con servidor web.
 
+## Replit Environment
+- **Language**: Python 3.11
+- **Framework**: Flask
+- **Port**: 5000 (web server)
+- **Main Entry**: `run.py` - imports KMZ file and starts the map editor server
+- **Deployment**: gunicorn with autoscale
+
 ## Modos de Uso
 
 ### Modo Interactivo (Menú)
@@ -42,6 +49,15 @@ python mapa_torres.py --servidor --html mapa_existente.html
   - Color del radio seleccionable
   - Grosor de línea ajustable
   - Edición completa después de crear (nombre, radio, color, grosor)
+- **Medir Distancia**: Herramienta de medición entre múltiples puntos con:
+  - Cálculo usando fórmula Haversine
+  - Visualización en metros o kilómetros
+  - Marcadores visuales A, B, C... y línea de conexión
+  - Panel flotante con distancia total y número de puntos
+- **Exportar Mapa**: Exportación a formatos geográficos:
+  - KML (Google Earth/Maps compatible)
+  - KMZ (KML comprimido)
+  - Exporta rutas, etiquetas, círculos y torres con estilos
 - **Selector de Color**: Personalización de elementos
 - **Deshacer/Limpiar**: Control de cambios
 - **Guardar Mapa**: Exporta como nuevo HTML con todos los cambios

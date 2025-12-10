@@ -395,6 +395,92 @@
             border: none;
             border-radius: 4px;
         }
+        
+        .tool-btn.measure {
+            background: #9b59b6;
+            color: white;
+        }
+        
+        .tool-btn.measure:hover {
+            background: #8e44ad;
+        }
+        
+        .tool-btn.measure.active {
+            background: #27ae60;
+            box-shadow: 0 0 10px rgba(39, 174, 96, 0.5);
+        }
+        
+        #distance-panel {
+            display: none;
+            position: fixed;
+            top: 60px;
+            left: 10px;
+            background: rgba(44, 62, 80, 0.95);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 1000;
+            min-width: 200px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        #distance-panel.show {
+            display: block;
+        }
+        
+        #distance-panel h4 {
+            margin: 0 0 10px 0;
+            color: #9b59b6;
+        }
+        
+        #distance-panel .distance-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        #distance-panel .distance-info {
+            font-size: 0.85em;
+            color: #bdc3c7;
+            margin-bottom: 10px;
+        }
+        
+        #modal-exportar {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #modal-exportar.show {
+            display: flex;
+        }
+        
+        .export-btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            text-align: left;
+            transition: all 0.2s;
+        }
+        
+        .export-btn:hover {
+            transform: translateX(5px);
+        }
+        
+        .export-kml { background: #3498db; color: white; }
+        .export-kmz { background: #27ae60; color: white; }
     </style>
 </head>
 <body>
@@ -433,6 +519,9 @@
                 <button class="tool-btn primary" id="btn-circulo" onclick="activarModo('circulo')">
                     Agregar Circulo
                 </button>
+                <button class="tool-btn measure" id="btn-medir" onclick="activarModoMedir()">
+                    Medir Distancia
+                </button>
                 <button class="tool-btn secondary" id="btn-cancelar" onclick="cancelarModo()">
                     Cancelar Dibujo
                 </button>
@@ -469,6 +558,9 @@
                 <button class="tool-btn success" onclick="guardarMapa()">
                     Guardar Mapa
                 </button>
+                <button class="tool-btn primary" onclick="abrirModalExportar()">
+                    Exportar Mapa
+                </button>
             </div>
             
             <div class="toolbar-section">
@@ -489,8 +581,34 @@
         </div>
     </div>
     
+    <div id="distance-panel">
+        <h4>Medir Distancia</h4>
+        <div class="distance-info" id="distance-points">Puntos: 0</div>
+        <div class="distance-value" id="distance-display">0 m</div>
+        <button class="tool-btn secondary" onclick="limpiarMedicion()" style="padding:8px;margin-top:5px;">Limpiar Medicion</button>
+        <button class="tool-btn danger" onclick="cerrarMedicion()" style="padding:8px;margin-top:5px;">Cerrar</button>
+    </div>
+    
     <div id="status-bar">
         Listo. Seleccione una herramienta para comenzar.
+    </div>
+    
+    <div id="modal-exportar">
+        <div class="modal-content">
+            <h3>Exportar Mapa</h3>
+            <p style="color:#bdc3c7;margin-bottom:15px;">Seleccione el formato de exportacion:</p>
+            <button class="export-btn export-kml" onclick="exportarMapa('kml')">
+                <strong>KML</strong> - Keyhole Markup Language<br>
+                <small>Archivo de texto, compatible con Google Earth</small>
+            </button>
+            <button class="export-btn export-kmz" onclick="exportarMapa('kmz')">
+                <strong>KMZ</strong> - KML Comprimido<br>
+                <small>Archivo comprimido, incluye iconos</small>
+            </button>
+            <div class="modal-buttons" style="margin-top:15px;">
+                <button class="btn-cancel" onclick="cerrarModalExportar()">Cancelar</button>
+            </div>
+        </div>
     </div>
     
     <div id="modal-rename">
@@ -583,6 +701,12 @@
         var elementoRenombrando = null;
         var coordenadasPendientes = null;
         var torreEditando = null;
+        
+        var modoMedir = false;
+        var puntosMedicion = [];
+        var marcadoresMedicion = [];
+        var lineaMedicion = null;
+        var medicionLayer = null;
         
         var elementosIniciales = {{ elementos | safe }};
         
@@ -1417,6 +1541,173 @@
                 guardarEditarTorre();
             }
         });
+        
+        function activarModoMedir() {
+            if (modoMedir) {
+                cerrarMedicion();
+                return;
+            }
+            
+            cancelarModo();
+            modoMedir = true;
+            document.getElementById('btn-medir').classList.add('active');
+            document.getElementById('distance-panel').classList.add('show');
+            
+            var iframe = document.getElementById('map-frame');
+            var L = iframe.contentWindow.L;
+            
+            if (!medicionLayer) {
+                medicionLayer = L.layerGroup().addTo(mapInstance);
+            }
+            
+            actualizarStatus('Modo MEDIR: Haga clic en el mapa para marcar puntos. La distancia se calcula automaticamente.');
+        }
+        
+        function calcularDistanciaTotal() {
+            if (puntosMedicion.length < 2) return 0;
+            
+            var distanciaTotal = 0;
+            for (var i = 1; i < puntosMedicion.length; i++) {
+                var p1 = puntosMedicion[i - 1];
+                var p2 = puntosMedicion[i];
+                distanciaTotal += calcularDistanciaHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
+            }
+            return distanciaTotal;
+        }
+        
+        function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
+            var R = 6371000;
+            var dLat = (lat2 - lat1) * Math.PI / 180;
+            var dLon = (lon2 - lon1) * Math.PI / 180;
+            var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+        
+        function actualizarPanelDistancia() {
+            var distancia = calcularDistanciaTotal();
+            var displayText = '';
+            
+            if (distancia >= 1000) {
+                displayText = (distancia / 1000).toFixed(2) + ' km';
+            } else {
+                displayText = distancia.toFixed(1) + ' m';
+            }
+            
+            document.getElementById('distance-display').textContent = displayText;
+            document.getElementById('distance-points').textContent = 'Puntos: ' + puntosMedicion.length;
+        }
+        
+        function agregarPuntoMedicion(latlng) {
+            if (!modoMedir || !mapInstance) return;
+            
+            var iframe = document.getElementById('map-frame');
+            var L = iframe.contentWindow.L;
+            
+            puntosMedicion.push(latlng);
+            
+            var marcador = L.circleMarker([latlng.lat, latlng.lng], {
+                radius: 6,
+                color: '#9b59b6',
+                fillColor: '#9b59b6',
+                fillOpacity: 1,
+                weight: 2
+            }).addTo(medicionLayer);
+            
+            marcador.bindTooltip('Punto ' + puntosMedicion.length, {permanent: false, direction: 'top'});
+            marcadoresMedicion.push(marcador);
+            
+            if (puntosMedicion.length >= 2) {
+                if (lineaMedicion) {
+                    medicionLayer.removeLayer(lineaMedicion);
+                }
+                
+                var coords = puntosMedicion.map(function(p) { return [p.lat, p.lng]; });
+                lineaMedicion = L.polyline(coords, {
+                    color: '#9b59b6',
+                    weight: 3,
+                    dashArray: '10, 5'
+                }).addTo(medicionLayer);
+            }
+            
+            actualizarPanelDistancia();
+        }
+        
+        function limpiarMedicion() {
+            if (medicionLayer) {
+                medicionLayer.clearLayers();
+            }
+            puntosMedicion = [];
+            marcadoresMedicion = [];
+            lineaMedicion = null;
+            document.getElementById('distance-display').textContent = '0 m';
+            document.getElementById('distance-points').textContent = 'Puntos: 0';
+            if (modoMedir) {
+                actualizarStatus('Medicion limpiada. Haga clic para comenzar de nuevo.');
+            }
+        }
+        
+        function cerrarMedicion() {
+            modoMedir = false;
+            if (medicionLayer) {
+                medicionLayer.clearLayers();
+            }
+            puntosMedicion = [];
+            marcadoresMedicion = [];
+            lineaMedicion = null;
+            document.getElementById('btn-medir').classList.remove('active');
+            document.getElementById('distance-panel').classList.remove('show');
+            document.getElementById('distance-display').textContent = '0 m';
+            document.getElementById('distance-points').textContent = 'Puntos: 0';
+            actualizarStatus('Modo medicion cerrado.');
+        }
+        
+        function abrirModalExportar() {
+            document.getElementById('modal-exportar').classList.add('show');
+        }
+        
+        function cerrarModalExportar() {
+            document.getElementById('modal-exportar').classList.remove('show');
+        }
+        
+        function exportarMapa(formato) {
+            actualizarStatus('Exportando mapa a ' + formato.toUpperCase() + '...');
+            cerrarModalExportar();
+            
+            fetch('/api/export/' + formato)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error al exportar');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'mapa_exportado.' + formato;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+                actualizarStatus('Mapa exportado exitosamente como ' + formato.toUpperCase());
+            })
+            .catch(err => {
+                actualizarStatus('Error al exportar: ' + err.message);
+                alert('Error al exportar el mapa. Intente de nuevo.');
+            });
+        }
+        
+        var originalManejarClickMapa = manejarClickMapa;
+        manejarClickMapa = function(latlng) {
+            if (modoMedir) {
+                agregarPuntoMedicion(latlng);
+                return;
+            }
+            originalManejarClickMapa(latlng);
+        };
     </script>
 </body>
 </html>

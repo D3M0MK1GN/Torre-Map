@@ -1,7 +1,10 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, Response
 import os
 import json
 import re
+import zipfile
+import io
+import math
 from datetime import datetime
 
 app = Flask(__name__)
@@ -366,6 +369,213 @@ def descargar_archivo(nombre_archivo):
     if os.path.exists(nombre_archivo):
         return send_file(nombre_archivo, as_attachment=True)
     return jsonify({'success': False, 'mensaje': 'Archivo no encontrado'}), 404
+
+def generar_kml_contenido():
+    """Genera el contenido KML desde los elementos guardados."""
+    elementos = cargar_elementos()
+    
+    kml_header = '''<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+    <name>Mapa Exportado</name>
+    <description>Mapa exportado desde Editor de Mapa de Inteligencia</description>
+'''
+    
+    kml_styles = '''
+    <Style id="rutaStyle">
+        <LineStyle>
+            <color>ff0000ff</color>
+            <width>3</width>
+        </LineStyle>
+    </Style>
+    <Style id="etiquetaStyle">
+        <IconStyle>
+            <Icon>
+                <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+            </Icon>
+        </IconStyle>
+    </Style>
+    <Style id="circuloStyle">
+        <LineStyle>
+            <color>ffff8800</color>
+            <width>2</width>
+        </LineStyle>
+        <PolyStyle>
+            <color>44ff8800</color>
+        </PolyStyle>
+    </Style>
+    <Style id="torreStyle">
+        <IconStyle>
+            <Icon>
+                <href>http://maps.google.com/mapfiles/kml/shapes/target.png</href>
+            </Icon>
+        </IconStyle>
+    </Style>
+'''
+    
+    kml_placemarks = ''
+    
+    for elem in elementos:
+        if elem['tipo'] == 'ruta':
+            color_hex = elem.get('color', '#FF0000').lstrip('#')
+            kml_color = 'ff' + color_hex[4:6] + color_hex[2:4] + color_hex[0:2]
+            coords = ' '.join([f"{p[1]},{p[0]},0" for p in elem.get('puntos', [])])
+            kml_placemarks += f'''
+    <Placemark>
+        <name>{elem.get('nombre', 'Ruta')}</name>
+        <Style>
+            <LineStyle>
+                <color>{kml_color}</color>
+                <width>{elem.get('grosor', 3)}</width>
+            </LineStyle>
+        </Style>
+        <LineString>
+            <coordinates>{coords}</coordinates>
+        </LineString>
+    </Placemark>
+'''
+        elif elem['tipo'] == 'etiqueta':
+            kml_placemarks += f'''
+    <Placemark>
+        <name>{elem.get('texto', 'Etiqueta')}</name>
+        <styleUrl>#etiquetaStyle</styleUrl>
+        <Point>
+            <coordinates>{elem.get('lon', 0)},{elem.get('lat', 0)},0</coordinates>
+        </Point>
+    </Placemark>
+'''
+        elif elem['tipo'] == 'torre':
+            color_hex = elem.get('color', '#e74c3c').lstrip('#')
+            kml_color = 'ff' + color_hex[4:6] + color_hex[2:4] + color_hex[0:2]
+            lat = elem.get('lat', 0)
+            lon = elem.get('lon', 0)
+            radio = elem.get('radio', 500)
+            
+            kml_placemarks += f'''
+    <Placemark>
+        <name>{elem.get('nombre', 'Torre Telefonica')}</name>
+        <description>Radio: {radio}m</description>
+        <styleUrl>#torreStyle</styleUrl>
+        <Point>
+            <coordinates>{lon},{lat},0</coordinates>
+        </Point>
+    </Placemark>
+'''
+            circle_coords = generar_circulo_coords(lat, lon, radio)
+            kml_placemarks += f'''
+    <Placemark>
+        <name>{elem.get('nombre', 'Torre')} - Cobertura</name>
+        <Style>
+            <LineStyle>
+                <color>{kml_color}</color>
+                <width>{elem.get('grosor', 2)}</width>
+            </LineStyle>
+            <PolyStyle>
+                <color>44{color_hex[4:6]}{color_hex[2:4]}{color_hex[0:2]}</color>
+            </PolyStyle>
+        </Style>
+        <Polygon>
+            <outerBoundaryIs>
+                <LinearRing>
+                    <coordinates>{circle_coords}</coordinates>
+                </LinearRing>
+            </outerBoundaryIs>
+        </Polygon>
+    </Placemark>
+'''
+        elif elem['tipo'] == 'circulo':
+            color_hex = elem.get('color', '#3388ff').lstrip('#')
+            kml_color = 'ff' + color_hex[4:6] + color_hex[2:4] + color_hex[0:2]
+            lat = elem.get('lat', 0)
+            lon = elem.get('lon', 0)
+            radio = elem.get('radio', 100)
+            
+            circle_coords = generar_circulo_coords(lat, lon, radio)
+            kml_placemarks += f'''
+    <Placemark>
+        <name>{elem.get('nombre', 'Circulo')}</name>
+        <Style>
+            <LineStyle>
+                <color>{kml_color}</color>
+                <width>2</width>
+            </LineStyle>
+            <PolyStyle>
+                <color>44{color_hex[4:6]}{color_hex[2:4]}{color_hex[0:2]}</color>
+            </PolyStyle>
+        </Style>
+        <Polygon>
+            <outerBoundaryIs>
+                <LinearRing>
+                    <coordinates>{circle_coords}</coordinates>
+                </LinearRing>
+            </outerBoundaryIs>
+        </Polygon>
+    </Placemark>
+'''
+    
+    kml_footer = '''
+</Document>
+</kml>'''
+    
+    return kml_header + kml_styles + kml_placemarks + kml_footer
+
+def generar_circulo_coords(lat, lon, radio_metros, num_puntos=64):
+    """Genera coordenadas de un círculo cerrado para KML."""
+    coords = []
+    R = 6371000
+    lat_rad = math.radians(lat)
+    
+    for i in range(num_puntos):
+        angulo = (2 * math.pi * i) / num_puntos
+        d_lat = (radio_metros / R) * math.cos(angulo)
+        d_lon = (radio_metros / (R * math.cos(lat_rad))) * math.sin(angulo)
+        
+        nuevo_lat = lat + math.degrees(d_lat)
+        nuevo_lon = lon + math.degrees(d_lon)
+        coords.append(f"{nuevo_lon},{nuevo_lat},0")
+    
+    if coords:
+        coords.append(coords[0])
+    
+    return ' '.join(coords)
+
+@app.route('/api/export/kml')
+def exportar_kml():
+    """Exporta el mapa a formato KML."""
+    try:
+        kml_content = generar_kml_contenido()
+        
+        return Response(
+            kml_content,
+            mimetype='application/vnd.google-earth.kml+xml',
+            headers={
+                'Content-Disposition': 'attachment; filename=mapa_exportado.kml'
+            }
+        )
+    except Exception as e:
+        return jsonify({'success': False, 'mensaje': str(e)}), 500
+
+@app.route('/api/export/kmz')
+def exportar_kmz():
+    """Exporta el mapa a formato KMZ (KML comprimido)."""
+    try:
+        kml_content = generar_kml_contenido()
+        
+        kmz_buffer = io.BytesIO()
+        with zipfile.ZipFile(kmz_buffer, 'w', zipfile.ZIP_DEFLATED) as kmz:
+            kmz.writestr('doc.kml', kml_content)
+        
+        kmz_buffer.seek(0)
+        
+        return Response(
+            kmz_buffer.getvalue(),
+            mimetype='application/vnd.google-earth.kmz',
+            headers={
+                'Content-Disposition': 'attachment; filename=mapa_exportado.kmz'
+            }
+        )
+    except Exception as e:
+        return jsonify({'success': False, 'mensaje': str(e)}), 500
 
 def set_mapa_archivo(archivo):
     """Configura el archivo de mapa a usar."""
