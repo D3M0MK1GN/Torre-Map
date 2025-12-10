@@ -6,6 +6,7 @@ from branca.element import Element
 import argparse
 import sys
 import json
+import os
 from math import radians, cos, sin, atan2, degrees, asin
 
 NOMBRE_HOJA = "FTD"
@@ -173,21 +174,26 @@ function actualizarRadio() {{
 </script>
 '''
 
-def crear_mapa_de_torres(archivo_excel, radio_metros):
+def crear_mapa_de_torres(archivo_excel, radio_metros, guardar_como=None):
+    """Crea un mapa de torres desde un archivo Excel."""
     print(f"Buscando hoja '{NOMBRE_HOJA}' en '{archivo_excel}'...")
     print(f"Radio configurado: {radio_metros} metros")
     try:
         df = pd.read_excel(archivo_excel, sheet_name=NOMBRE_HOJA)
     except FileNotFoundError:
-        sys.exit(f"Error: Archivo '{archivo_excel}' no encontrado.")
+        print(f"Error: Archivo '{archivo_excel}' no encontrado.")
+        return None
     except ValueError:
-        sys.exit(f"Error: Hoja '{NOMBRE_HOJA}' no encontrada en el archivo.")
+        print(f"Error: Hoja '{NOMBRE_HOJA}' no encontrada en el archivo.")
+        return None
     except Exception as e:
-        sys.exit(f"Error al leer Excel: {e}")
+        print(f"Error al leer Excel: {e}")
+        return None
     
     lat_col, lon_col = encontrar_columnas_coordenadas(df)
     if not lat_col or not lon_col:
-        sys.exit("Error: No se encontraron columnas 'Latitud' y 'Longitud'.")
+        print("Error: No se encontraron columnas 'Latitud' y 'Longitud'.")
+        return None
     
     print(f"Columnas encontradas: Latitud ('{lat_col}'), Longitud ('{lon_col}')")
     print("Limpiando formato de coordenadas...")
@@ -197,7 +203,8 @@ def crear_mapa_de_torres(archivo_excel, radio_metros):
     df_valido = df.dropna(subset=['Lat_F', 'Lon_F'])
     
     if df_valido.empty:
-        sys.exit("Error: No se encontraron coordenadas validas.")
+        print("Error: No se encontraron coordenadas validas.")
+        return None
     
     print(f"{len(df_valido)} coordenadas validas procesadas.")
     
@@ -225,16 +232,130 @@ def crear_mapa_de_torres(archivo_excel, radio_metros):
     html_extra = crear_html_control_y_scripts(radio_metros, torres_data)
     m.get_root().html.add_child(Element(html_extra))
     
-    archivo_salida = f"mapa_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.html"
+    if guardar_como:
+        archivo_salida = guardar_como
+    else:
+        archivo_salida = f"mapa_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.html"
+    
     m.save(archivo_salida)
     print("-" * 50)
     print(f"Mapa generado: {archivo_salida}")
-    print("Abra el archivo en su navegador para ver las torres.")
     print("-" * 50)
+    return archivo_salida
+
+def mostrar_menu_principal():
+    """Muestra el menú principal."""
+    print("\n" + "=" * 60)
+    print("       SISTEMA DE MAPAS DE INTELIGENCIA")
+    print("=" * 60)
+    print("\n  1. Crear Mapa de Inteligencia")
+    print("  2. Trabajar Mapa de Inteligencia")
+    print("  0. Salir")
+    print("\n" + "-" * 60)
+    return input("Seleccione una opcion: ").strip()
+
+def mostrar_menu_trabajar():
+    """Muestra el submenú de trabajar mapa."""
+    print("\n" + "-" * 60)
+    print("       TRABAJAR MAPA DE INTELIGENCIA")
+    print("-" * 60)
+    print("\n  A. Mapa Existente (cargar archivo HTML)")
+    print("  B. Nuevo Mapa (crear desde Excel)")
+    print("  0. Volver al menu principal")
+    print("\n" + "-" * 60)
+    return input("Seleccione una opcion: ").strip().upper()
+
+def opcion_crear_mapa():
+    """Opción 1: Crear mapa estático."""
+    print("\n--- CREAR MAPA DE INTELIGENCIA ---\n")
+    archivo = input("Ruta del archivo Excel [torres.xlsx]: ").strip() or "torres.xlsx"
+    radio = input("Radio en metros [500]: ").strip()
+    radio = int(radio) if radio else 500
+    
+    resultado = crear_mapa_de_torres(archivo, radio)
+    if resultado:
+        print("\nAbra el archivo en su navegador para ver las torres.")
+    input("\nPresione Enter para continuar...")
+
+def opcion_trabajar_mapa():
+    """Opción 2: Trabajar mapa con servidor interactivo."""
+    opcion = mostrar_menu_trabajar()
+    
+    if opcion == 'A':
+        archivo_html = input("\nRuta del archivo HTML existente: ").strip()
+        if not archivo_html or not os.path.exists(archivo_html):
+            print("Error: Archivo no encontrado.")
+            input("Presione Enter para continuar...")
+            return
+        iniciar_servidor_editor(archivo_html)
+        
+    elif opcion == 'B':
+        print("\n--- NUEVO MAPA PARA EDICION ---\n")
+        archivo = input("Ruta del archivo Excel [torres.xlsx]: ").strip() or "torres.xlsx"
+        radio = input("Radio en metros [500]: ").strip()
+        radio = int(radio) if radio else 500
+        
+        archivo_temp = "mapa_trabajo_temp.html"
+        resultado = crear_mapa_de_torres(archivo, radio, guardar_como=archivo_temp)
+        if resultado:
+            iniciar_servidor_editor(archivo_temp)
+        else:
+            input("Presione Enter para continuar...")
+    
+    elif opcion == '0':
+        return
+    else:
+        print("Opcion no valida.")
+        input("Presione Enter para continuar...")
+
+def iniciar_servidor_editor(archivo_html):
+    """Inicia el servidor Flask para edición interactiva."""
+    print(f"\nIniciando servidor de edicion para: {archivo_html}")
+    print("El servidor se ejecutara en http://0.0.0.0:5000")
+    print("Presione Ctrl+C para detener el servidor.\n")
+    
+    from app import app, set_mapa_archivo
+    set_mapa_archivo(archivo_html)
+    app.run(host='0.0.0.0', port=5000, debug=False)
+
+def modo_interactivo():
+    """Ejecuta el menú interactivo."""
+    while True:
+        opcion = mostrar_menu_principal()
+        
+        if opcion == '1':
+            opcion_crear_mapa()
+        elif opcion == '2':
+            opcion_trabajar_mapa()
+        elif opcion == '0':
+            print("\nHasta luego!\n")
+            break
+        else:
+            print("Opcion no valida.")
+            input("Presione Enter para continuar...")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Grafica torres telefonicas desde Excel con sectores de 120 grados.")
-    parser.add_argument("archivo_excel", help="Ruta al archivo Excel")
-    parser.add_argument("-r", "--radio", type=int, default=500, help="Radio del circulo en metros (default: 500)")
-    args = parser.parse_args()
-    crear_mapa_de_torres(args.archivo_excel, args.radio)
+    if len(sys.argv) > 1:
+        parser = argparse.ArgumentParser(description="Sistema de Mapas de Inteligencia")
+        parser.add_argument("archivo_excel", nargs='?', help="Ruta al archivo Excel")
+        parser.add_argument("-r", "--radio", type=int, default=500, help="Radio del circulo en metros (default: 500)")
+        parser.add_argument("--servidor", action="store_true", help="Iniciar en modo servidor para edicion")
+        parser.add_argument("--html", type=str, help="Archivo HTML para editar en modo servidor")
+        args = parser.parse_args()
+        
+        if args.servidor:
+            if args.html and os.path.exists(args.html):
+                iniciar_servidor_editor(args.html)
+            elif args.archivo_excel:
+                archivo_temp = "mapa_trabajo_temp.html"
+                resultado = crear_mapa_de_torres(args.archivo_excel, args.radio, guardar_como=archivo_temp)
+                if resultado:
+                    iniciar_servidor_editor(archivo_temp)
+            else:
+                print("Error: Debe proporcionar --html o un archivo Excel para modo servidor.")
+        elif args.archivo_excel:
+            crear_mapa_de_torres(args.archivo_excel, args.radio)
+        else:
+            modo_interactivo()
+    else:
+        modo_interactivo()
