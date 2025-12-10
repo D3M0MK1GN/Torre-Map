@@ -268,6 +268,14 @@ def generar_script_elementos(elementos):
 (function() {{
     var elementosGuardados = {elementos_json};
     
+    function calcularPuntoFinal(lat, lon, distKm, angulo) {{
+        var R = 6371, distRad = distKm / R, brngRad = angulo * Math.PI / 180;
+        var lat1Rad = lat * Math.PI / 180, lon1Rad = lon * Math.PI / 180;
+        var lat2Rad = Math.asin(Math.sin(lat1Rad) * Math.cos(distRad) + Math.cos(lat1Rad) * Math.sin(distRad) * Math.cos(brngRad));
+        var lon2Rad = lon1Rad + Math.atan2(Math.sin(brngRad) * Math.sin(distRad) * Math.cos(lat1Rad), Math.cos(distRad) - Math.sin(lat1Rad) * Math.sin(lat2Rad));
+        return [lat2Rad * 180 / Math.PI, lon2Rad * 180 / Math.PI];
+    }}
+    
     function esperarMapa() {{
         var mapInstance = null;
         for (var key in window) {{
@@ -296,21 +304,45 @@ def generar_script_elementos(elementos):
             }} else if (elem.tipo === 'torre') {{
                 var torreColor = elem.color || '#e74c3c';
                 var torreGrosor = elem.grosor || 2;
+                var iconoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><path fill="' + torreColor + '" stroke="white" stroke-width="1" d="M12 2L8 10h3v10h2V10h3L12 2z"/><circle cx="12" cy="5" r="2" fill="white"/><path fill="none" stroke="' + torreColor + '" stroke-width="2" d="M6 8c0-3 2.5-5 6-5s6 2 6 5"/><path fill="none" stroke="' + torreColor + '" stroke-width="2" d="M4 10c0-4 3.5-7 8-7s8 3 8 7"/></svg>';
                 var torreIcono = L.divIcon({{
-                    className: 'custom-marker',
-                    html: '<div style="background:' + torreColor + ';color:white;padding:5px 10px;border-radius:50%;font-weight:bold;font-size:14px;text-align:center;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">T</div>',
-                    iconSize: [40, 40],
-                    iconAnchor: [20, 20]
+                    className: 'bts-marker',
+                    html: '<div style="background:white;border-radius:50%;padding:2px;box-shadow:0 2px 5px rgba(0,0,0,0.3);">' + iconoSvg + '</div>',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
                 }});
                 L.marker([elem.lat, elem.lon], {{icon: torreIcono}}).addTo(mapInstance)
                     .bindPopup('<b>' + elem.nombre + '</b><br>Radio: ' + elem.radio + 'm');
                 L.circle([elem.lat, elem.lon], {{
                     radius: elem.radio,
                     color: torreColor,
-                    fillColor: torreColor,
+                    fill: true,
                     fillOpacity: 0.15,
                     weight: torreGrosor
-                }}).addTo(mapInstance).bindPopup(elem.nombre);
+                }}).addTo(mapInstance);
+                var angulos = [180, 300, 60];
+                var colores = ['blue', 'green', 'red'];
+                angulos.forEach(function(angulo, i) {{
+                    var pf = calcularPuntoFinal(elem.lat, elem.lon, elem.radio / 1000, angulo);
+                    L.polyline([[elem.lat, elem.lon], pf], {{
+                        color: colores[i],
+                        weight: 2,
+                        opacity: 0.8,
+                        dashArray: '5, 5'
+                    }}).addTo(mapInstance);
+                }});
+                var cardinales = {{'N': 0, 'E': 90, 'S': 180, 'O': 270}};
+                for (var p in cardinales) {{
+                    var pc = calcularPuntoFinal(elem.lat, elem.lon, (elem.radio * 0.9) / 1000, cardinales[p]);
+                    L.marker(pc, {{
+                        icon: L.divIcon({{
+                            className: 'cardinal-label',
+                            html: '<div style="font-size:10pt;font-weight:bold;color:black;background:white;padding:2px;border-radius:3px;">' + p + '</div>',
+                            iconSize: [20, 20],
+                            iconAnchor: [10, 10]
+                        }})
+                    }}).addTo(mapInstance);
+                }}
             }} else if (elem.tipo === 'circulo') {{
                 L.circle([elem.lat, elem.lon], {{
                     radius: elem.radio,

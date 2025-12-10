@@ -506,7 +506,7 @@
     
     <div id="modal-editar-torre">
         <div class="modal-content">
-            <h3>Editar Torre Telefonica</h3>
+            <h3>Editar Radio BTS</h3>
             <div style="margin-bottom:10px;">
                 <label style="display:block;margin-bottom:5px;color:#bdc3c7;">Nombre de la Antena:</label>
                 <input type="text" id="editar-nombre-torre" placeholder="Nombre de la torre" style="width:100%;padding:8px;border:none;border-radius:4px;">
@@ -535,7 +535,7 @@
             <h3>Seleccione Tipo de Elemento</h3>
             <p style="color:#bdc3c7;margin-bottom:15px;" id="coordenadas-mostrar"></p>
             <button class="tipo-elemento-btn tipo-torre" onclick="seleccionarTipoElemento('torre')">
-                Torre Telefonica
+                Radio BTS
             </button>
             <button class="tipo-elemento-btn tipo-encuentro" onclick="seleccionarTipoElemento('encuentro')">
                 Punto de Encuentro
@@ -548,8 +548,8 @@
             </button>
             <div id="radio-torre-group">
                 <div style="margin-bottom:10px;">
-                    <label>Nombre de la Antena:</label>
-                    <input type="text" id="nombre-torre-input" placeholder="Ej: Torre Central" style="width:100%;padding:8px;border:none;border-radius:4px;margin-top:5px;">
+                    <label>Nombre de la Radio BTS:</label>
+                    <input type="text" id="nombre-torre-input" placeholder="Ej: BTS Central" style="width:100%;padding:8px;border:none;border-radius:4px;margin-top:5px;">
                 </div>
                 <div style="margin-bottom:10px;">
                     <label>Radio en metros:</label>
@@ -564,7 +564,7 @@
                     <input type="number" id="grosor-torre-input" value="2" min="1" max="10" style="width:100%;padding:8px;border:none;border-radius:4px;margin-top:5px;">
                 </div>
                 <button class="tool-btn success" style="margin-top:10px;" onclick="confirmarTorre()">
-                    Agregar Torre
+                    Agregar Radio BTS
                 </button>
             </div>
             <div class="modal-buttons" style="margin-top:15px;">
@@ -585,6 +585,56 @@
         var torreEditando = null;
         
         var elementosIniciales = {{ elementos | safe }};
+        
+        function calcularPuntoFinal(lat, lon, distKm, angulo) {
+            var R = 6371, distRad = distKm / R, brngRad = angulo * Math.PI / 180;
+            var lat1Rad = lat * Math.PI / 180, lon1Rad = lon * Math.PI / 180;
+            var lat2Rad = Math.asin(Math.sin(lat1Rad) * Math.cos(distRad) + Math.cos(lat1Rad) * Math.sin(distRad) * Math.cos(brngRad));
+            var lon2Rad = lon1Rad + Math.atan2(Math.sin(brngRad) * Math.sin(distRad) * Math.cos(lat1Rad), Math.cos(distRad) - Math.sin(lat1Rad) * Math.sin(lat2Rad));
+            return [lat2Rad * 180 / Math.PI, lon2Rad * 180 / Math.PI];
+        }
+        
+        function dibujarSectoresBTS(L, elementosLayer, lat, lon, radioMetros, color, grosor) {
+            var angulos = [180, 300, 60];
+            var colores = ['blue', 'green', 'red'];
+            var cardinales = {'N': 0, 'E': 90, 'S': 180, 'O': 270};
+            var sectoresLayers = [];
+            
+            var circulo = L.circle([lat, lon], {
+                radius: radioMetros,
+                color: color,
+                fill: true,
+                fillOpacity: 0.15,
+                weight: grosor
+            }).addTo(elementosLayer);
+            sectoresLayers.push(circulo);
+            
+            angulos.forEach(function(angulo, i) {
+                var pf = calcularPuntoFinal(lat, lon, radioMetros / 1000, angulo);
+                var linea = L.polyline([[lat, lon], pf], {
+                    color: colores[i],
+                    weight: 2,
+                    opacity: 0.8,
+                    dashArray: '5, 5'
+                }).addTo(elementosLayer);
+                sectoresLayers.push(linea);
+            });
+            
+            for (var p in cardinales) {
+                var pc = calcularPuntoFinal(lat, lon, (radioMetros * 0.9) / 1000, cardinales[p]);
+                var marcador = L.marker(pc, {
+                    icon: L.divIcon({
+                        className: 'cardinal-label',
+                        html: '<div style="font-size:10pt;font-weight:bold;color:black;background:white;padding:2px;border-radius:3px;">' + p + '</div>',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    })
+                }).addTo(elementosLayer);
+                sectoresLayers.push(marcador);
+            }
+            
+            return sectoresLayers;
+        }
         
         function toggleToolbar() {
             document.body.classList.toggle('toolbar-collapsed');
@@ -868,25 +918,21 @@
                 var color = elemento.color || '#e74c3c';
                 var grosor = elemento.grosor || 2;
                 
+                var iconoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><path fill="' + color + '" stroke="white" stroke-width="1" d="M12 2L8 10h3v10h2V10h3L12 2z"/><circle cx="12" cy="5" r="2" fill="white"/><path fill="none" stroke="' + color + '" stroke-width="2" d="M6 8c0-3 2.5-5 6-5s6 2 6 5"/><path fill="none" stroke="' + color + '" stroke-width="2" d="M4 10c0-4 3.5-7 8-7s8 3 8 7"/></svg>';
                 var icono = L.divIcon({
-                    className: 'custom-marker',
-                    html: '<div style="background:' + color + ';color:white;padding:5px 10px;border-radius:50%;font-weight:bold;font-size:14px;text-align:center;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">T</div>',
-                    iconSize: [40, 40],
-                    iconAnchor: [20, 20]
+                    className: 'bts-marker',
+                    html: '<div style="background:white;border-radius:50%;padding:2px;box-shadow:0 2px 5px rgba(0,0,0,0.3);">' + iconoSvg + '</div>',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
                 });
                 
                 var marker = L.marker([elemento.lat, elemento.lon], {icon: icono}).addTo(elementosLayer);
                 marker.bindPopup('<b>' + elemento.nombre + '</b><br>Radio: ' + elemento.radio + 'm');
                 elemento._marker = marker;
                 
-                layer = L.circle([elemento.lat, elemento.lon], {
-                    radius: elemento.radio,
-                    color: color,
-                    fillColor: color,
-                    fillOpacity: 0.15,
-                    weight: grosor
-                }).addTo(elementosLayer);
-                layer.bindPopup(elemento.nombre);
+                var sectoresLayers = dibujarSectoresBTS(L, elementosLayer, elemento.lat, elemento.lon, elemento.radio, color, grosor);
+                elemento._sectores = sectoresLayers;
+                layer = sectoresLayers[0];
                 
             } else if (elemento.tipo === 'circulo') {
                 layer = L.circle([elemento.lat, elemento.lon], {
@@ -909,6 +955,11 @@
                 if (data.success) {
                     var elem = elementosEnMapa.find(e => e.id === id);
                     if (elem) {
+                        if (elem._sectores) {
+                            elem._sectores.forEach(function(layer) {
+                                elementosLayer.removeLayer(layer);
+                            });
+                        }
                         if (elem._layer) {
                             elementosLayer.removeLayer(elem._layer);
                         }
@@ -1053,14 +1104,44 @@
                 var icono = elem.tipo === 'ruta' ? '~' : (elem.tipo === 'etiqueta' ? 'A' : (elem.tipo === 'torre' ? 'T' : 'O'));
                 var nombre = elem.nombre || elem.texto || 'Elemento';
                 var editarFunc = elem.tipo === 'torre' ? 'abrirModalEditarTorre(' + elem.id + ')' : 'abrirModalRename(' + elem.id + ')';
-                html += '<div class="elemento-item">' +
+                var oculto = elem._oculto ? true : false;
+                var ojoIcono = oculto ? '&#128065;&#8211;' : '&#128065;';
+                var ojoTitle = oculto ? 'Mostrar' : 'Ocultar';
+                var opacidad = oculto ? 'opacity:0.5;' : '';
+                html += '<div class="elemento-item" style="' + opacidad + '">' +
                     '<span class="elem-nombre" onclick="' + editarFunc + '" title="Click para editar">[' + icono + '] ' + nombre + '</span>' +
                     '<div class="elem-actions">' +
+                    '<button class="action-btn visibility-btn" onclick="toggleVisibilidad(' + elem.id + ')" title="' + ojoTitle + '" style="font-size:12px;">' + ojoIcono + '</button>' +
                     '<button class="action-btn edit-btn" onclick="' + editarFunc + '" title="Editar">&#9998;</button>' +
                     '<button class="action-btn delete-btn" onclick="eliminarElemento(' + elem.id + ')" title="Eliminar">X</button>' +
                     '</div></div>';
             });
             lista.innerHTML = html;
+        }
+        
+        function toggleVisibilidad(id) {
+            var elem = elementosEnMapa.find(e => e.id === id);
+            if (!elem) return;
+            
+            elem._oculto = !elem._oculto;
+            
+            if (elem._oculto) {
+                if (elem._sectores) {
+                    elem._sectores.forEach(function(layer) {
+                        elementosLayer.removeLayer(layer);
+                    });
+                }
+                if (elem._layer) {
+                    elementosLayer.removeLayer(elem._layer);
+                }
+                if (elem._marker) {
+                    elementosLayer.removeLayer(elem._marker);
+                }
+            } else {
+                dibujarElementoEnMapa(elem);
+            }
+            
+            actualizarListaElementos();
         }
         
         function actualizarStatus(mensaje) {
@@ -1183,7 +1264,7 @@
         function confirmarTorre() {
             if (!coordenadasPendientes) return;
             
-            var nombre = document.getElementById('nombre-torre-input').value.trim() || 'Torre Telefonica';
+            var nombre = document.getElementById('nombre-torre-input').value.trim() || 'Radio BTS';
             var radio = parseInt(document.getElementById('radio-torre-input').value);
             var color = document.getElementById('color-torre-input').value;
             var grosor = parseInt(document.getElementById('grosor-torre-input').value) || 2;
@@ -1198,23 +1279,18 @@
             var lat = coordenadasPendientes.lat;
             var lon = coordenadasPendientes.lon;
             
+            var iconoSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><path fill="' + color + '" stroke="white" stroke-width="1" d="M12 2L8 10h3v10h2V10h3L12 2z"/><circle cx="12" cy="5" r="2" fill="white"/><path fill="none" stroke="' + color + '" stroke-width="2" d="M6 8c0-3 2.5-5 6-5s6 2 6 5"/><path fill="none" stroke="' + color + '" stroke-width="2" d="M4 10c0-4 3.5-7 8-7s8 3 8 7"/></svg>';
             var icono = L.divIcon({
-                className: 'custom-marker',
-                html: '<div style="background:' + color + ';color:white;padding:5px 10px;border-radius:50%;font-weight:bold;font-size:14px;text-align:center;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">T</div>',
-                iconSize: [40, 40],
-                iconAnchor: [20, 20]
+                className: 'bts-marker',
+                html: '<div style="background:white;border-radius:50%;padding:2px;box-shadow:0 2px 5px rgba(0,0,0,0.3);">' + iconoSvg + '</div>',
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
             });
             
             var marker = L.marker([lat, lon], {icon: icono}).addTo(elementosLayer);
             marker.bindPopup('<b>' + nombre + '</b><br>Radio: ' + radio + 'm<br>Lat: ' + lat.toFixed(6) + '<br>Lon: ' + lon.toFixed(6));
             
-            var circle = L.circle([lat, lon], {
-                radius: radio,
-                color: color,
-                fillColor: color,
-                fillOpacity: 0.15,
-                weight: grosor
-            }).addTo(elementosLayer);
+            var sectoresLayers = dibujarSectoresBTS(L, elementosLayer, lat, lon, radio, color, grosor);
             
             fetch('/api/agregar-torre', {
                 method: 'POST',
@@ -1231,7 +1307,8 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    data.elemento._layer = circle;
+                    data.elemento._layer = sectoresLayers[0];
+                    data.elemento._sectores = sectoresLayers;
                     data.elemento._marker = marker;
                     elementosEnMapa.push(data.elemento);
                     actualizarListaElementos();
@@ -1251,7 +1328,7 @@
             }
             
             torreEditando = elem;
-            document.getElementById('editar-nombre-torre').value = elem.nombre || 'Torre Telefonica';
+            document.getElementById('editar-nombre-torre').value = elem.nombre || 'Radio BTS';
             document.getElementById('editar-radio-torre').value = elem.radio || 500;
             document.getElementById('editar-color-torre').value = elem.color || '#e74c3c';
             document.getElementById('editar-grosor-torre').value = elem.grosor || 2;
@@ -1303,6 +1380,11 @@
                 if (data.success) {
                     var elem = elementosEnMapa.find(e => e.id === elemId);
                     if (elem) {
+                        if (elem._sectores) {
+                            elem._sectores.forEach(function(layer) {
+                                elementosLayer.removeLayer(layer);
+                            });
+                        }
                         if (elem._layer) {
                             elementosLayer.removeLayer(elem._layer);
                         }
@@ -1319,7 +1401,7 @@
                     }
                     
                     actualizarListaElementos();
-                    actualizarStatus('Torre actualizada: ' + nombre);
+                    actualizarStatus('Radio BTS actualizada: ' + nombre);
                     cerrarModalEditarTorre();
                 } else {
                     alert('Error al actualizar: ' + (data.mensaje || 'Error desconocido'));
