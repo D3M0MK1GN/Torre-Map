@@ -413,7 +413,7 @@
         #distance-panel {
             display: none;
             position: fixed;
-            top: 60px;
+            top: 180px;
             left: 10px;
             background: rgba(44, 62, 80, 0.95);
             color: white;
@@ -1560,6 +1560,25 @@
                 medicionLayer = L.layerGroup().addTo(mapInstance);
             }
             
+            if (mapInstance) {
+                var panes = mapInstance.getPanes();
+                if (panes.markerPane) {
+                    panes.markerPane.style.pointerEvents = 'none';
+                }
+                if (panes.overlayPane) {
+                    panes.overlayPane.style.pointerEvents = 'none';
+                }
+                if (panes.shadowPane) {
+                    panes.shadowPane.style.pointerEvents = 'none';
+                }
+                if (panes.popupPane) {
+                    panes.popupPane.style.pointerEvents = 'none';
+                }
+                if (panes.tooltipPane) {
+                    panes.tooltipPane.style.pointerEvents = 'none';
+                }
+            }
+            
             actualizarStatus('Modo MEDIR: Haga clic en el mapa para marcar puntos. La distancia se calcula automaticamente.');
         }
         
@@ -1661,6 +1680,26 @@
             document.getElementById('distance-panel').classList.remove('show');
             document.getElementById('distance-display').textContent = '0 m';
             document.getElementById('distance-points').textContent = 'Puntos: 0';
+            
+            if (mapInstance) {
+                var panes = mapInstance.getPanes();
+                if (panes.markerPane) {
+                    panes.markerPane.style.pointerEvents = 'auto';
+                }
+                if (panes.overlayPane) {
+                    panes.overlayPane.style.pointerEvents = 'auto';
+                }
+                if (panes.shadowPane) {
+                    panes.shadowPane.style.pointerEvents = 'auto';
+                }
+                if (panes.popupPane) {
+                    panes.popupPane.style.pointerEvents = 'auto';
+                }
+                if (panes.tooltipPane) {
+                    panes.tooltipPane.style.pointerEvents = 'auto';
+                }
+            }
+            
             actualizarStatus('Modo medicion cerrado.');
         }
         
