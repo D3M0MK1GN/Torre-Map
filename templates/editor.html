@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor de Mapa de Inteligencia</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        
+        body.toolbar-collapsed #map-container {
+            right: 40px;
+        }
+        
+        body.toolbar-collapsed #toolbar {
+            width: 40px;
+            overflow: hidden;
+        }
+        
+        body.toolbar-collapsed #toolbar .toolbar-content {
+            display: none;
+        }
+        
+        body.toolbar-collapsed #toolbar .toolbar-header {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            padding: 10px 5px;
+            height: auto;
+        }
+        
+        body.toolbar-collapsed #toolbar .toolbar-header h2 {
+            font-size: 0.9em;
+            margin: 0;
+        }
+        
+        body.toolbar-collapsed #toolbar .toolbar-header small {
+            display: none;
+        }
+        
+        body.toolbar-collapsed #status-bar {
+            right: 40px;
+        }
+        
+        body.toolbar-collapsed #toggle-toolbar {
+            right: 5px;
+        }
+        
+        #map-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 300px;
+            bottom: 0;
+            transition: right 0.3s ease;
+        }
+        
+        #map-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        #toolbar {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 300px;
+            height: 100%;
+            background: #2c3e50;
+            color: white;
+            overflow-y: auto;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.3);
+            transition: width 0.3s ease;
+        }
+        
+        #toggle-toolbar {
+            position: fixed;
+            top: 10px;
+            right: 310px;
+            z-index: 1001;
+            background: #3498db;
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: right 0.3s ease;
+        }
+        
+        #toggle-toolbar:hover {
+            background: #2980b9;
+        }
+        
+        .toolbar-header {
+            background: #1a252f;
+            padding: 15px;
+            text-align: center;
+            border-bottom: 2px solid #3498db;
+            cursor: pointer;
+        }
+        
+        .toolbar-header h2 {
+            font-size: 1.2em;
+            margin-bottom: 5px;
+        }
+        
+        .toolbar-section {
+            padding: 15px;
+            border-bottom: 1px solid #34495e;
+        }
+        
+        .toolbar-section h3 {
+            font-size: 0.95em;
+            margin-bottom: 10px;
+            color: #3498db;
+        }
+        
+        .tool-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+        
+        .tool-btn.primary {
+            background: #3498db;
+            color: white;
+        }
+        
+        .tool-btn.primary:hover {
+            background: #2980b9;
+        }
+        
+        .tool-btn.primary.active {
+            background: #27ae60;
+            box-shadow: 0 0 10px rgba(39, 174, 96, 0.5);
+        }
+        
+        .tool-btn.secondary {
+            background: #7f8c8d;
+            color: white;
+        }
+        
+        .tool-btn.secondary:hover {
+            background: #6c7a7b;
+        }
+        
+        .tool-btn.danger {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .tool-btn.danger:hover {
+            background: #c0392b;
+        }
+        
+        .tool-btn.success {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .tool-btn.success:hover {
+            background: #219a52;
+        }
+        
+        .input-group {
+            margin: 10px 0;
+        }
+        
+        .input-group label {
+            display: block;
+            font-size: 0.85em;
+            margin-bottom: 5px;
+            color: #bdc3c7;
+        }
+        
+        .input-group input,
+        .input-group select {
+            width: 100%;
+            padding: 8px;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        
+        .color-input {
+            height: 35px;
+            cursor: pointer;
+        }
+        
+        #elementos-lista {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #34495e;
+            border-radius: 6px;
+            padding: 5px;
+        }
+        
+        .elemento-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            margin: 3px 0;
+            background: #2c3e50;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+        
+        .elemento-item .elem-nombre {
+            flex: 1;
+            cursor: pointer;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        
+        .elemento-item .elem-nombre:hover {
+            background: #34495e;
+        }
+        
+        .elemento-item .elem-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .elemento-item .action-btn {
+            background: #7f8c8d;
+            border: none;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75em;
+        }
+        
+        .elemento-item .action-btn.edit-btn:hover {
+            background: #3498db;
+        }
+        
+        .elemento-item .action-btn.delete-btn {
+            background: #e74c3c;
+        }
+        
+        .elemento-item .action-btn.delete-btn:hover {
+            background: #c0392b;
+        }
+        
+        #status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 300px;
+            background: rgba(44, 62, 80, 0.9);
+            color: white;
+            padding: 10px 20px;
+            font-size: 0.9em;
+            transition: right 0.3s ease;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        #instrucciones {
+            background: #1a252f;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            line-height: 1.5;
+            color: #bdc3c7;
+        }
+        
+        #modal-rename {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #modal-rename.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: #2c3e50;
+            padding: 25px;
+            border-radius: 10px;
+            min-width: 350px;
+            color: white;
+        }
+        
+        .modal-content h3 {
+            margin-bottom: 15px;
+            color: #3498db;
+        }
+        
+        .modal-content input {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 1em;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        .modal-buttons button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        
+        .modal-buttons .btn-save {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .modal-buttons .btn-cancel {
+            background: #7f8c8d;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <button id="toggle-toolbar" onclick="toggleToolbar()" title="Ocultar/Mostrar herramientas">&#10005;</button>
+    
+    <div id="map-container">
+        <iframe id="map-frame" srcdoc="{{ mapa_contenido | e }}"></iframe>
+    </div>
+    
+    <div id="toolbar">
+        <div class="toolbar-header" onclick="toggleToolbar()">
+            <h2>Editor de Mapa</h2>
+            <small>Herramientas de Inteligencia</small>
+        </div>
+        
+        <div class="toolbar-content">
+            <div class="toolbar-section">
+                <h3>Herramientas de Dibujo</h3>
+                <button class="tool-btn primary" id="btn-ruta" onclick="activarModo('ruta')">
+                    Dibujar Ruta
+                </button>
+                <button class="tool-btn primary" id="btn-etiqueta" onclick="activarModo('etiqueta')">
+                    Agregar Etiqueta
+                </button>
+                <button class="tool-btn primary" id="btn-circulo" onclick="activarModo('circulo')">
+                    Agregar Circulo
+                </button>
+                <button class="tool-btn secondary" id="btn-cancelar" onclick="cancelarModo()">
+                    Cancelar Dibujo
+                </button>
+            </div>
+            
+            <div class="toolbar-section">
+                <h3>Opciones</h3>
+                <div class="input-group">
+                    <label>Color:</label>
+                    <input type="color" id="color-selector" class="color-input" value="#FF0000">
+                </div>
+                <div class="input-group">
+                    <label>Texto/Nombre:</label>
+                    <input type="text" id="texto-input" placeholder="Nombre del elemento">
+                </div>
+                <div class="input-group" id="radio-group">
+                    <label>Radio (metros):</label>
+                    <input type="number" id="radio-input" value="100" min="10" max="10000">
+                </div>
+                <div class="input-group" id="grosor-group">
+                    <label>Grosor de linea:</label>
+                    <input type="number" id="grosor-input" value="3" min="1" max="20">
+                </div>
+            </div>
+            
+            <div class="toolbar-section">
+                <h3>Acciones</h3>
+                <button class="tool-btn secondary" onclick="deshacer()">
+                    Deshacer Ultimo
+                </button>
+                <button class="tool-btn danger" onclick="limpiarTodo()">
+                    Limpiar Todo
+                </button>
+                <button class="tool-btn success" onclick="guardarMapa()">
+                    Guardar Mapa
+                </button>
+            </div>
+            
+            <div class="toolbar-section">
+                <h3>Elementos Agregados</h3>
+                <div id="elementos-lista"></div>
+            </div>
+            
+            <div class="toolbar-section">
+                <div id="instrucciones">
+                    <strong>Instrucciones:</strong><br>
+                    1. Seleccione una herramienta<br>
+                    2. Haga clic en el mapa<br>
+                    3. Para rutas: doble clic para terminar<br>
+                    4. Click en nombre para renombrar<br>
+                    5. Guarde los cambios al finalizar
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="status-bar">
+        Listo. Seleccione una herramienta para comenzar.
+    </div>
+    
+    <div id="modal-rename">
+        <div class="modal-content">
+            <h3>Renombrar Elemento</h3>
+            <input type="text" id="rename-input" placeholder="Nuevo nombre">
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="cerrarModalRename()">Cancelar</button>
+                <button class="btn-save" onclick="guardarRename()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var modoActual = null;
+        var puntosRuta = [];
+        var elementosEnMapa = [];
+        var mapInstance = null;
+        var rutaTemp = null;
+        var elementosLayer = null;
+        var elementoRenombrando = null;
+        
+        var elementosIniciales = {{ elementos | safe }};
+        
+        function toggleToolbar() {
+            document.body.classList.toggle('toolbar-collapsed');
+            var btn = document.getElementById('toggle-toolbar');
+            if (document.body.classList.contains('toolbar-collapsed')) {
+                btn.style.right = '5px';
+                btn.innerHTML = '&#9776;';
+            } else {
+                btn.style.right = '310px';
+                btn.innerHTML = '&#10005;';
+            }
+        }
+        
+        document.getElementById('map-frame').onload = function() {
+            var iframe = document.getElementById('map-frame');
+            var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            
+            setTimeout(function() {
+                var iframeWindow = iframe.contentWindow;
+                for (var key in iframeWindow) {
+                    try {
+                        if (iframeWindow[key] && iframeWindow[key] instanceof iframeWindow.L.Map) {
+                            mapInstance = iframeWindow[key];
+                            break;
+                        }
+                    } catch(e) {}
+                }
+                
+                if (mapInstance) {
+                    elementosLayer = iframeWindow.L.layerGroup().addTo(mapInstance);
+                    
+                    mapInstance.on('click', function(e) {
+                        manejarClickMapa(e.latlng);
+                    });
+                    
+                    mapInstance.on('dblclick', function(e) {
+                        if (modoActual === 'ruta' && puntosRuta.length >= 2) {
+                            finalizarRuta();
+                        }
+                    });
+                    
+                    elementosIniciales.forEach(function(elem) {
+                        dibujarElementoEnMapa(elem);
+                        elementosEnMapa.push(elem);
+                    });
+                    actualizarListaElementos();
+                    
+                    hacerControlPlegable(iframeDoc);
+                    
+                    actualizarStatus('Mapa cargado correctamente.');
+                } else {
+                    actualizarStatus('Error: No se pudo conectar con el mapa.');
+                }
+            }, 1000);
+        };
+        
+        function hacerControlPlegable(iframeDoc) {
+            function intentar() {
+                var controlRadio = iframeDoc.getElementById('control-radio');
+                if (controlRadio && !controlRadio.querySelector('.toggle-banner-btn')) {
+                    var toggleBtn = iframeDoc.createElement('button');
+                    toggleBtn.className = 'toggle-banner-btn';
+                    toggleBtn.innerHTML = '&#9650;';
+                    toggleBtn.style.cssText = 'background:#3498db;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;margin-left:15px;font-size:0.8em;';
+                    toggleBtn.title = 'Ocultar/Mostrar panel';
+                    
+                    var elementosOcultar = [];
+                    Array.from(controlRadio.children).forEach(function(child) {
+                        if (child.tagName !== 'H3') {
+                            elementosOcultar.push(child);
+                        }
+                    });
+                    
+                    toggleBtn.onclick = function() {
+                        var isCollapsed = controlRadio.getAttribute('data-collapsed') === 'true';
+                        if (isCollapsed) {
+                            controlRadio.style.padding = '10px 20px';
+                            elementosOcultar.forEach(function(child) {
+                                child.style.display = '';
+                            });
+                            toggleBtn.innerHTML = '&#9650;';
+                            controlRadio.setAttribute('data-collapsed', 'false');
+                        } else {
+                            controlRadio.style.padding = '5px 15px';
+                            elementosOcultar.forEach(function(child) {
+                                child.style.display = 'none';
+                            });
+                            toggleBtn.innerHTML = '&#9660;';
+                            controlRadio.setAttribute('data-collapsed', 'true');
+                        }
+                    };
+                    controlRadio.appendChild(toggleBtn);
+                } else if (!controlRadio) {
+                    setTimeout(intentar, 500);
+                }
+            }
+            intentar();
+        }
+        
+        function activarModo(modo) {
+            document.querySelectorAll('.tool-btn.primary').forEach(btn => btn.classList.remove('active'));
+            
+            if (modoActual === modo) {
+                modoActual = null;
+                actualizarStatus('Modo cancelado.');
+                return;
+            }
+            
+            modoActual = modo;
+            puntosRuta = [];
+            
+            document.getElementById('btn-' + modo).classList.add('active');
+            
+            if (modo === 'ruta') {
+                actualizarStatus('Modo RUTA: Haga clic para agregar puntos. Doble clic para finalizar.');
+            } else if (modo === 'etiqueta') {
+                actualizarStatus('Modo ETIQUETA: Haga clic donde desea colocar la etiqueta.');
+            } else if (modo === 'circulo') {
+                actualizarStatus('Modo CIRCULO: Haga clic para colocar el centro del circulo.');
+            }
+        }
+        
+        function cancelarModo() {
+            modoActual = null;
+            puntosRuta = [];
+            if (rutaTemp) {
+                elementosLayer.removeLayer(rutaTemp);
+                rutaTemp = null;
+            }
+            document.querySelectorAll('.tool-btn.primary').forEach(btn => btn.classList.remove('active'));
+            actualizarStatus('Modo cancelado.');
+        }
+        
+        function manejarClickMapa(latlng) {
+            if (!modoActual || !mapInstance) return;
+            
+            var iframe = document.getElementById('map-frame');
+            var L = iframe.contentWindow.L;
+            
+            if (modoActual === 'ruta') {
+                puntosRuta.push([latlng.lat, latlng.lng]);
+                
+                if (rutaTemp) {
+                    elementosLayer.removeLayer(rutaTemp);
+                }
+                
+                var color = document.getElementById('color-selector').value;
+                var grosor = parseInt(document.getElementById('grosor-input').value);
+                
+                rutaTemp = L.polyline(puntosRuta, {
+                    color: color,
+                    weight: grosor,
+                    dashArray: '5, 10'
+                }).addTo(elementosLayer);
+                
+                actualizarStatus('Ruta: ' + puntosRuta.length + ' puntos. Doble clic para finalizar.');
+                
+            } else if (modoActual === 'etiqueta') {
+                agregarEtiqueta(latlng.lat, latlng.lng);
+                
+            } else if (modoActual === 'circulo') {
+                agregarCirculo(latlng.lat, latlng.lng);
+            }
+        }
+        
+        function finalizarRuta() {
+            if (puntosRuta.length < 2) {
+                actualizarStatus('La ruta debe tener al menos 2 puntos.');
+                return;
+            }
+            
+            var color = document.getElementById('color-selector').value;
+            var grosor = parseInt(document.getElementById('grosor-input').value);
+            var nombre = document.getElementById('texto-input').value || 'Ruta ' + (elementosEnMapa.length + 1);
+            
+            fetch('/api/agregar-ruta', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    puntos: puntosRuta,
+                    color: color,
+                    grosor: grosor,
+                    nombre: nombre
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (rutaTemp) {
+                        elementosLayer.removeLayer(rutaTemp);
+                        rutaTemp = null;
+                    }
+                    dibujarElementoEnMapa(data.elemento);
+                    elementosEnMapa.push(data.elemento);
+                    actualizarListaElementos();
+                    actualizarStatus('Ruta agregada: ' + nombre);
+                }
+            });
+            
+            puntosRuta = [];
+            modoActual = null;
+            document.querySelectorAll('.tool-btn.primary').forEach(btn => btn.classList.remove('active'));
+        }
+        
+        function agregarEtiqueta(lat, lon) {
+            var texto = document.getElementById('texto-input').value || 'Etiqueta';
+            var color = document.getElementById('color-selector').value;
+            
+            fetch('/api/agregar-etiqueta', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    lat: lat,
+                    lon: lon,
+                    texto: texto,
+                    color: color
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    dibujarElementoEnMapa(data.elemento);
+                    elementosEnMapa.push(data.elemento);
+                    actualizarListaElementos();
+                    actualizarStatus('Etiqueta agregada: ' + texto);
+                }
+            });
+            
+            modoActual = null;
+            document.querySelectorAll('.tool-btn.primary').forEach(btn => btn.classList.remove('active'));
+        }
+        
+        function agregarCirculo(lat, lon) {
+            var radio = parseInt(document.getElementById('radio-input').value);
+            var color = document.getElementById('color-selector').value;
+            var nombre = document.getElementById('texto-input').value || 'Circulo';
+            
+            fetch('/api/agregar-circulo', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    lat: lat,
+                    lon: lon,
+                    radio: radio,
+                    color: color,
+                    nombre: nombre
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    dibujarElementoEnMapa(data.elemento);
+                    elementosEnMapa.push(data.elemento);
+                    actualizarListaElementos();
+                    actualizarStatus('Circulo agregado: ' + nombre);
+                }
+            });
+            
+            modoActual = null;
+            document.querySelectorAll('.tool-btn.primary').forEach(btn => btn.classList.remove('active'));
+        }
+        
+        function dibujarElementoEnMapa(elemento) {
+            var iframe = document.getElementById('map-frame');
+            var L = iframe.contentWindow.L;
+            
+            var layer = null;
+            
+            if (elemento.tipo === 'ruta') {
+                layer = L.polyline(elemento.puntos, {
+                    color: elemento.color,
+                    weight: elemento.grosor
+                }).addTo(elementosLayer);
+                layer.bindPopup(elemento.nombre);
+                
+            } else if (elemento.tipo === 'etiqueta') {
+                layer = L.marker([elemento.lat, elemento.lon]).addTo(elementosLayer);
+                layer.bindPopup(elemento.texto);
+                
+            } else if (elemento.tipo === 'circulo') {
+                layer = L.circle([elemento.lat, elemento.lon], {
+                    radius: elemento.radio,
+                    color: elemento.color,
+                    fillOpacity: 0.2
+                }).addTo(elementosLayer);
+                layer.bindPopup(elemento.nombre);
+            }
+            
+            if (layer) {
+                elemento._layer = layer;
+            }
+        }
+        
+        function eliminarElemento(id) {
+            fetch('/api/eliminar-elemento/' + id, {method: 'DELETE'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    var elem = elementosEnMapa.find(e => e.id === id);
+                    if (elem && elem._layer) {
+                        elementosLayer.removeLayer(elem._layer);
+                    }
+                    elementosEnMapa = elementosEnMapa.filter(e => e.id !== id);
+                    actualizarListaElementos();
+                    actualizarStatus('Elemento eliminado.');
+                }
+            });
+        }
+        
+        function abrirModalRename(id) {
+            var elem = elementosEnMapa.find(e => e.id === id);
+            if (!elem) return;
+            
+            elementoRenombrando = elem;
+            var nombreActual = elem.nombre || elem.texto || '';
+            document.getElementById('rename-input').value = nombreActual;
+            document.getElementById('modal-rename').classList.add('show');
+            document.getElementById('rename-input').focus();
+        }
+        
+        function cerrarModalRename() {
+            document.getElementById('modal-rename').classList.remove('show');
+            elementoRenombrando = null;
+        }
+        
+        function guardarRename() {
+            if (!elementoRenombrando) return;
+            
+            var nuevoNombre = document.getElementById('rename-input').value.trim();
+            if (!nuevoNombre) {
+                alert('El nombre no puede estar vacio');
+                return;
+            }
+            
+            var elemId = elementoRenombrando.id;
+            
+            fetch('/api/actualizar-elemento/' + elemId, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    nombre: nuevoNombre,
+                    texto: nuevoNombre
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    var elem = elementosEnMapa.find(e => e.id === elemId);
+                    if (elem) {
+                        if (elem.tipo === 'etiqueta') {
+                            elem.texto = nuevoNombre;
+                        } else {
+                            elem.nombre = nuevoNombre;
+                        }
+                        
+                        if (elem._layer && elem._layer.getPopup()) {
+                            elem._layer.setPopupContent(nuevoNombre);
+                        } else if (elem._layer) {
+                            elem._layer.bindPopup(nuevoNombre);
+                        }
+                    }
+                    
+                    actualizarListaElementos();
+                    actualizarStatus('Elemento renombrado: ' + nuevoNombre);
+                    cerrarModalRename();
+                } else {
+                    alert('Error al renombrar: ' + (data.mensaje || 'Error desconocido'));
+                }
+            })
+            .catch(function(err) {
+                alert('Error de conexion');
+            });
+        }
+        
+        document.getElementById('rename-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                guardarRename();
+            }
+        });
+        
+        function deshacer() {
+            fetch('/api/deshacer', {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    var ultimo = elementosEnMapa.pop();
+                    if (ultimo && ultimo._layer) {
+                        elementosLayer.removeLayer(ultimo._layer);
+                    }
+                    actualizarListaElementos();
+                    actualizarStatus('Ultimo elemento eliminado.');
+                } else {
+                    actualizarStatus('No hay elementos para deshacer.');
+                }
+            });
+        }
+        
+        function limpiarTodo() {
+            if (!confirm('¿Esta seguro de limpiar todos los elementos agregados?')) return;
+            
+            fetch('/api/limpiar', {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    elementosLayer.clearLayers();
+                    elementosEnMapa = [];
+                    actualizarListaElementos();
+                    actualizarStatus('Todos los elementos eliminados.');
+                }
+            });
+        }
+        
+        function guardarMapa() {
+            actualizarStatus('Guardando mapa...');
+            
+            fetch('/api/guardar', {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    actualizarStatus(data.mensaje);
+                    alert('Mapa guardado como: ' + data.archivo);
+                } else {
+                    actualizarStatus('Error al guardar: ' + data.mensaje);
+                }
+            });
+        }
+        
+        function actualizarListaElementos() {
+            var lista = document.getElementById('elementos-lista');
+            if (elementosEnMapa.length === 0) {
+                lista.innerHTML = '<div style="padding:10px;text-align:center;color:#7f8c8d;">Sin elementos</div>';
+                return;
+            }
+            
+            var html = '';
+            elementosEnMapa.forEach(function(elem) {
+                var icono = elem.tipo === 'ruta' ? '~' : (elem.tipo === 'etiqueta' ? 'A' : 'O');
+                var nombre = elem.nombre || elem.texto || 'Elemento';
+                html += '<div class="elemento-item">' +
+                    '<span class="elem-nombre" onclick="abrirModalRename(' + elem.id + ')" title="Click para renombrar">[' + icono + '] ' + nombre + '</span>' +
+                    '<div class="elem-actions">' +
+                    '<button class="action-btn edit-btn" onclick="abrirModalRename(' + elem.id + ')" title="Renombrar">&#9998;</button>' +
+                    '<button class="action-btn delete-btn" onclick="eliminarElemento(' + elem.id + ')" title="Eliminar">X</button>' +
+                    '</div></div>';
+            });
+            lista.innerHTML = html;
+        }
+        
+        function actualizarStatus(mensaje) {
+            document.getElementById('status-bar').textContent = mensaje;
+        }
+    </script>
+</body>
+</html>
