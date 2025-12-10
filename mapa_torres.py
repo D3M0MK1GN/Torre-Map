@@ -171,39 +171,133 @@ def leer_contenido_kml(archivo):
         print(f"Error al leer archivo: {e}")
         return None
 
+def extraer_iconos_kmz(archivo):
+    iconos_base64 = {}
+    extension = archivo.lower().split('.')[-1]
+    if extension != 'kmz':
+        return iconos_base64
+    try:
+        with zipfile.ZipFile(archivo, 'r') as z:
+            for nombre in z.namelist():
+                if nombre.startswith('images/') and nombre.endswith('.png'):
+                    datos = z.read(nombre)
+                    icono_base64 = f"data:image/png;base64,{base64.b64encode(datos).decode()}"
+                    iconos_base64[nombre] = icono_base64
+                    print(f"  Icono extraido: {nombre}")
+    except Exception as e:
+        print(f"Error al extraer iconos: {e}")
+    return iconos_base64
+
+def parsear_estilos_kml(contenido_kml):
+    import re
+    estilos = {}
+    style_maps = {}
+    contenido_str = contenido_kml.decode('utf-8') if isinstance(contenido_kml, bytes) else contenido_kml
+    style_pattern = r'<Style id="([^"]+)"[^>]*>.*?<Icon>.*?<href>([^<]+)</href>.*?</Icon>.*?</Style>'
+    for match in re.finditer(style_pattern, contenido_str, re.DOTALL):
+        style_id = match.group(1)
+        href = match.group(2)
+        estilos[style_id] = href
+    stylemap_pattern = r'<StyleMap id="([^"]+)"[^>]*>.*?<Pair>.*?<key>normal</key>.*?<styleUrl>#([^<]+)</styleUrl>.*?</Pair>.*?</StyleMap>'
+    for match in re.finditer(stylemap_pattern, contenido_str, re.DOTALL):
+        map_id = match.group(1)
+        normal_style = match.group(2)
+        if normal_style in estilos:
+            style_maps[map_id] = estilos[normal_style]
+    return estilos, style_maps
+
+def obtener_style_url_placemark(contenido_kml, nombre_placemark):
+    import re
+    contenido_str = contenido_kml.decode('utf-8') if isinstance(contenido_kml, bytes) else contenido_kml
+    pattern = rf'<Placemark[^>]*>.*?<name>{re.escape(nombre_placemark)}</name>.*?<styleUrl>#([^<]+)</styleUrl>.*?</Placemark>'
+    match = re.search(pattern, contenido_str, re.DOTALL)
+    if match:
+        return match.group(1)
+    return None
+
+def extraer_placemarks_con_estilos(contenido_kml):
+    import re
+    contenido_str = contenido_kml.decode('utf-8') if isinstance(contenido_kml, bytes) else contenido_kml
+    placemarks = []
+    placemark_pattern = r'<Placemark[^>]*>(.*?)</Placemark>'
+    for match in re.finditer(placemark_pattern, contenido_str, re.DOTALL):
+        placemark_content = match.group(1)
+        name_match = re.search(r'<name>([^<]*)</name>', placemark_content)
+        nombre = name_match.group(1) if name_match else ''
+        desc_match = re.search(r'<description>([^<]*)</description>', placemark_content)
+        desc = desc_match.group(1) if desc_match else ''
+        style_match = re.search(r'<styleUrl>#([^<]+)</styleUrl>', placemark_content)
+        style_url = style_match.group(1) if style_match else None
+        coord_match = re.search(r'<coordinates>([^<]+)</coordinates>', placemark_content)
+        if coord_match:
+            coords_str = coord_match.group(1).strip()
+            coords_list = coords_str.split()
+            if len(coords_list) == 1:
+                parts = coords_str.split(',')
+                if len(parts) >= 2:
+                    try:
+                        lon = float(parts[0])
+                        lat = float(parts[1])
+                        placemarks.append({
+                            'tipo': 'punto',
+                            'lat': lat,
+                            'lon': lon,
+                            'nombre': nombre,
+                            'desc': desc,
+                            'style_url': style_url
+                        })
+                    except:
+                        pass
+            else:
+                coords = []
+                for coord in coords_list:
+                    parts = coord.split(',')
+                    if len(parts) >= 2:
+                        try:
+                            lon = float(parts[0])
+                            lat = float(parts[1])
+                            coords.append((lat, lon))
+                        except:
+                            pass
+                if coords:
+                    if coords[0] == coords[-1] and len(coords) > 3:
+                        placemarks.append({
+                            'tipo': 'poligono',
+                            'coords': coords,
+                            'nombre': nombre,
+                            'desc': desc,
+                            'style_url': style_url
+                        })
+                    else:
+                        placemarks.append({
+                            'tipo': 'linea',
+                            'coords': coords,
+                            'nombre': nombre,
+                            'desc': desc,
+                            'style_url': style_url
+                        })
+    return placemarks
+
 def importar_kml_kmz(archivo, guardar_como=None):
     print(f"Importando archivo: {archivo}")
     contenido = leer_contenido_kml(archivo)
     if not contenido:
         return None
     
-    k = kml.KML()
-    k.from_string(contenido)
+    print("Extrayendo iconos del archivo...")
+    iconos_base64 = extraer_iconos_kmz(archivo)
     
-    puntos, lineas, poligonos = [], [], []
+    print("Parseando estilos...")
+    estilos, style_maps = parsear_estilos_kml(contenido)
     
-    def extraer_elementos(feature):
-        if hasattr(feature, 'features'):
-            for f in feature.features():
-                extraer_elementos(f)
-        if hasattr(feature, 'geometry') and feature.geometry:
-            geom = feature.geometry
-            nombre = getattr(feature, 'name', '') or ''
-            desc = getattr(feature, 'description', '') or ''
-            geom_type = getattr(geom, 'geom_type', type(geom).__name__)
-            
-            if geom_type == 'Point':
-                c = list(geom.coords)[0]
-                puntos.append({'lat': c[1], 'lon': c[0], 'nombre': nombre, 'desc': desc})
-            elif geom_type == 'LineString':
-                lineas.append({'coords': [(c[1], c[0]) for c in geom.coords], 'nombre': nombre, 'desc': desc})
-            elif geom_type == 'Polygon':
-                poligonos.append({'coords': [(c[1], c[0]) for c in geom.exterior.coords], 'nombre': nombre, 'desc': desc})
+    print("Extrayendo elementos con estilos...")
+    placemarks = extraer_placemarks_con_estilos(contenido)
     
-    for feature in k.features():
-        extraer_elementos(feature)
+    puntos = [p for p in placemarks if p['tipo'] == 'punto']
+    lineas = [p for p in placemarks if p['tipo'] == 'linea']
+    poligonos = [p for p in placemarks if p['tipo'] == 'poligono']
     
-    if not (puntos or lineas or poligonos):
+    if not placemarks:
         print("Error: No se encontraron elementos geograficos.")
         return None
     
@@ -217,7 +311,24 @@ def importar_kml_kmz(archivo, guardar_como=None):
     
     for p in puntos:
         popup = f"<b>{p['nombre']}</b><br>{p['desc']}" if p['nombre'] or p['desc'] else f"Lat: {p['lat']:.4f}, Lon: {p['lon']:.4f}"
-        folium.Marker([p['lat'], p['lon']], popup=popup, tooltip=p['nombre'] or None).add_to(m)
+        icono_url = None
+        if p.get('style_url'):
+            style_id = p['style_url']
+            href = None
+            if style_id in style_maps:
+                href = style_maps[style_id]
+            elif style_id in estilos:
+                href = estilos[style_id]
+            elif style_id + '-normal' in estilos:
+                href = estilos[style_id + '-normal']
+            if href and href in iconos_base64:
+                icono_url = iconos_base64[href]
+        
+        if icono_url:
+            icono = CustomIcon(icono_url, icon_size=(32, 32), icon_anchor=(16, 32))
+            folium.Marker([p['lat'], p['lon']], popup=popup, tooltip=p['nombre'] or None, icon=icono).add_to(m)
+        else:
+            folium.Marker([p['lat'], p['lon']], popup=popup, tooltip=p['nombre'] or None).add_to(m)
     
     for l in lineas:
         popup = f"<b>{l['nombre']}</b><br>{l['desc']}" if l['nombre'] or l['desc'] else None

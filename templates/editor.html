@@ -290,7 +290,7 @@
             color: #bdc3c7;
         }
         
-        #modal-rename {
+        #modal-rename, #modal-tipo-elemento {
             display: none;
             position: fixed;
             top: 0;
@@ -303,7 +303,7 @@
             justify-content: center;
         }
         
-        #modal-rename.show {
+        #modal-rename.show, #modal-tipo-elemento.show {
             display: flex;
         }
         
@@ -352,6 +352,49 @@
             background: #7f8c8d;
             color: white;
         }
+        
+        .tipo-elemento-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95em;
+            text-align: left;
+            transition: all 0.2s;
+        }
+        
+        .tipo-elemento-btn:hover {
+            transform: translateX(5px);
+        }
+        
+        .tipo-torre { background: #e74c3c; color: white; }
+        .tipo-encuentro { background: #27ae60; color: white; }
+        .tipo-focus { background: #f39c12; color: white; }
+        .tipo-normal { background: #3498db; color: white; }
+        
+        #radio-torre-group {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #34495e;
+            border-radius: 6px;
+        }
+        
+        #radio-torre-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #bdc3c7;
+        }
+        
+        #radio-torre-group input {
+            width: 100%;
+            padding: 8px;
+            border: none;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -368,6 +411,17 @@
         </div>
         
         <div class="toolbar-content">
+            <div class="toolbar-section">
+                <h3>Ir a Coordenadas</h3>
+                <div class="input-group">
+                    <label>Coordenadas (lat, lon):</label>
+                    <input type="text" id="coordenadas-input" placeholder="9.7489, -69.5839">
+                </div>
+                <button class="tool-btn primary" onclick="irACoordenadas()">
+                    Ir a Coordenadas
+                </button>
+            </div>
+            
             <div class="toolbar-section">
                 <h3>Herramientas de Dibujo</h3>
                 <button class="tool-btn primary" id="btn-ruta" onclick="activarModo('ruta')">
@@ -449,6 +503,35 @@
             </div>
         </div>
     </div>
+    
+    <div id="modal-tipo-elemento">
+        <div class="modal-content">
+            <h3>Seleccione Tipo de Elemento</h3>
+            <p style="color:#bdc3c7;margin-bottom:15px;" id="coordenadas-mostrar"></p>
+            <button class="tipo-elemento-btn tipo-torre" onclick="seleccionarTipoElemento('torre')">
+                Torre Telefonica
+            </button>
+            <button class="tipo-elemento-btn tipo-encuentro" onclick="seleccionarTipoElemento('encuentro')">
+                Punto de Encuentro
+            </button>
+            <button class="tipo-elemento-btn tipo-focus" onclick="seleccionarTipoElemento('focus')">
+                Focus
+            </button>
+            <button class="tipo-elemento-btn tipo-normal" onclick="seleccionarTipoElemento('normal')">
+                Marcador Normal
+            </button>
+            <div id="radio-torre-group">
+                <label>Radio en metros:</label>
+                <input type="number" id="radio-torre-input" value="500" min="50" max="10000">
+                <button class="tool-btn success" style="margin-top:10px;" onclick="confirmarTorre()">
+                    Agregar Torre
+                </button>
+            </div>
+            <div class="modal-buttons" style="margin-top:15px;">
+                <button class="btn-cancel" onclick="cerrarModalTipo()">Cancelar</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         var modoActual = null;
@@ -458,6 +541,7 @@
         var rutaTemp = null;
         var elementosLayer = null;
         var elementoRenombrando = null;
+        var coordenadasPendientes = null;
         
         var elementosIniciales = {{ elementos | safe }};
         
@@ -910,6 +994,177 @@
         
         function actualizarStatus(mensaje) {
             document.getElementById('status-bar').textContent = mensaje;
+        }
+        
+        function irACoordenadas() {
+            var input = document.getElementById('coordenadas-input').value.trim();
+            if (!input) {
+                alert('Por favor ingrese las coordenadas');
+                return;
+            }
+            
+            var partes = input.split(',');
+            if (partes.length !== 2) {
+                alert('Formato invalido. Use: latitud, longitud (ej: 9.7489, -69.5839)');
+                return;
+            }
+            
+            var lat = parseFloat(partes[0].trim());
+            var lon = parseFloat(partes[1].trim());
+            
+            if (isNaN(lat) || isNaN(lon)) {
+                alert('Coordenadas invalidas. Use numeros validos.');
+                return;
+            }
+            
+            if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+                alert('Coordenadas fuera de rango. Latitud: -90 a 90, Longitud: -180 a 180');
+                return;
+            }
+            
+            coordenadasPendientes = {lat: lat, lon: lon};
+            
+            if (mapInstance) {
+                mapInstance.setView([lat, lon], 16);
+            }
+            
+            document.getElementById('coordenadas-mostrar').textContent = 'Coordenadas: ' + lat.toFixed(6) + ', ' + lon.toFixed(6);
+            document.getElementById('radio-torre-group').style.display = 'none';
+            document.getElementById('modal-tipo-elemento').classList.add('show');
+        }
+        
+        function cerrarModalTipo() {
+            document.getElementById('modal-tipo-elemento').classList.remove('show');
+            document.getElementById('radio-torre-group').style.display = 'none';
+            coordenadasPendientes = null;
+        }
+        
+        function seleccionarTipoElemento(tipo) {
+            if (!coordenadasPendientes) return;
+            
+            if (tipo === 'torre') {
+                document.getElementById('radio-torre-group').style.display = 'block';
+                return;
+            }
+            
+            var iframe = document.getElementById('map-frame');
+            var L = iframe.contentWindow.L;
+            var lat = coordenadasPendientes.lat;
+            var lon = coordenadasPendientes.lon;
+            var nombre = '';
+            var color = '';
+            var icono = null;
+            
+            if (tipo === 'encuentro') {
+                nombre = 'Punto de Encuentro';
+                color = '#27ae60';
+                icono = L.divIcon({
+                    className: 'custom-marker',
+                    html: '<div style="background:#27ae60;color:white;padding:5px 10px;border-radius:50%;font-weight:bold;font-size:16px;text-align:center;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">PE</div>',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                });
+            } else if (tipo === 'focus') {
+                nombre = 'Focus';
+                color = '#f39c12';
+                icono = L.divIcon({
+                    className: 'custom-marker',
+                    html: '<div style="background:#f39c12;color:white;padding:5px 10px;border-radius:50%;font-weight:bold;font-size:16px;text-align:center;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">F</div>',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                });
+            } else {
+                nombre = 'Marcador';
+                color = '#3498db';
+            }
+            
+            var marker;
+            if (icono) {
+                marker = L.marker([lat, lon], {icon: icono}).addTo(elementosLayer);
+            } else {
+                marker = L.marker([lat, lon]).addTo(elementosLayer);
+            }
+            marker.bindPopup('<b>' + nombre + '</b><br>Lat: ' + lat.toFixed(6) + '<br>Lon: ' + lon.toFixed(6));
+            
+            fetch('/api/agregar-etiqueta', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    lat: lat,
+                    lon: lon,
+                    texto: nombre,
+                    color: color
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    data.elemento._layer = marker;
+                    elementosEnMapa.push(data.elemento);
+                    actualizarListaElementos();
+                    actualizarStatus(nombre + ' agregado en: ' + lat.toFixed(4) + ', ' + lon.toFixed(4));
+                }
+            });
+            
+            cerrarModalTipo();
+        }
+        
+        function confirmarTorre() {
+            if (!coordenadasPendientes) return;
+            
+            var radio = parseInt(document.getElementById('radio-torre-input').value);
+            if (isNaN(radio) || radio < 50 || radio > 10000) {
+                alert('Radio invalido. Use un valor entre 50 y 10000 metros.');
+                return;
+            }
+            
+            var iframe = document.getElementById('map-frame');
+            var L = iframe.contentWindow.L;
+            var lat = coordenadasPendientes.lat;
+            var lon = coordenadasPendientes.lon;
+            var nombre = 'Torre Telefonica';
+            
+            var icono = L.divIcon({
+                className: 'custom-marker',
+                html: '<div style="background:#e74c3c;color:white;padding:5px 10px;border-radius:50%;font-weight:bold;font-size:14px;text-align:center;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">T</div>',
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            });
+            
+            var marker = L.marker([lat, lon], {icon: icono}).addTo(elementosLayer);
+            marker.bindPopup('<b>' + nombre + '</b><br>Radio: ' + radio + 'm<br>Lat: ' + lat.toFixed(6) + '<br>Lon: ' + lon.toFixed(6));
+            
+            var circle = L.circle([lat, lon], {
+                radius: radio,
+                color: '#e74c3c',
+                fillColor: '#e74c3c',
+                fillOpacity: 0.15,
+                weight: 2
+            }).addTo(elementosLayer);
+            
+            fetch('/api/agregar-circulo', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    lat: lat,
+                    lon: lon,
+                    radio: radio,
+                    color: '#e74c3c',
+                    nombre: nombre + ' (R:' + radio + 'm)'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    data.elemento._layer = circle;
+                    data.elemento._marker = marker;
+                    elementosEnMapa.push(data.elemento);
+                    actualizarListaElementos();
+                    actualizarStatus(nombre + ' agregada con radio de ' + radio + 'm');
+                }
+            });
+            
+            cerrarModalTipo();
         }
     </script>
 </body>
