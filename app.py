@@ -110,7 +110,7 @@ def agregar_etiqueta():
         'lon': data.get('lon'),
         'texto': data.get('texto', 'Etiqueta'),
         'color': data.get('color', '#000000'),
-        'icono': data.get('icono', 'info')
+        'icono': data.get('icono', '')
     }
     elementos.append(elemento)
     guardar_elementos(elementos)
@@ -215,6 +215,8 @@ def actualizar_elemento(elemento_id):
                 elem['nombre'] = data['nombre']
             if 'texto' in data:
                 elem['texto'] = data['texto']
+            if 'icono' in data:
+                elem['icono'] = data['icono']
             guardar_elementos(elementos)
             return jsonify({'success': True, 'elemento': elem})
     

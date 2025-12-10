@@ -481,6 +481,36 @@
         
         .export-kml { background: #3498db; color: white; }
         .export-kmz { background: #27ae60; color: white; }
+        
+        .icono-select {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.9em;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .icono-preview {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #34495e;
+            border-radius: 6px;
+        }
+        
+        .icono-preview-svg {
+            width: 32px;
+            height: 32px;
+        }
+        
+        .icono-preview-label {
+            color: #bdc3c7;
+            font-size: 0.85em;
+        }
     </style>
 </head>
 <body>
@@ -522,9 +552,26 @@
                 <button class="tool-btn measure" id="btn-medir" onclick="activarModoMedir()">
                     Medir Distancia
                 </button>
-                <button class="tool-btn secondary" id="btn-cancelar" onclick="cancelarModo()">
-                    Cancelar Dibujo
-                </button>
+            </div>
+            
+            <div class="toolbar-section">
+                <h3>Icono de Etiqueta</h3>
+                <div class="input-group">
+                    <label>Tipo de marcador:</label>
+                    <select id="icono-selector" class="icono-select">
+                        <option value="">-- Marcador Normal --</option>
+                        <option value="punto_encuentro">Punto de Encuentro</option>
+                        <option value="sospechoso">Ubicacion de Sospechoso</option>
+                        <option value="escena_crimen">Escena del Crimen</option>
+                        <option value="vehiculo">Vehiculo</option>
+                        <option value="testigo">Testigo</option>
+                        <option value="camara">Camara de Vigilancia</option>
+                        <option value="patrulla">Patrulla Policial</option>
+                        <option value="victima">Victima</option>
+                        <option value="evidencia">Evidencia</option>
+                        <option value="punto_control">Punto de Control</option>
+                    </select>
+                </div>
             </div>
             
             <div class="toolbar-section">
@@ -613,8 +660,17 @@
     
     <div id="modal-rename">
         <div class="modal-content">
-            <h3>Renombrar Elemento</h3>
-            <input type="text" id="rename-input" placeholder="Nuevo nombre">
+            <h3>Editar Elemento</h3>
+            <div style="margin-bottom:10px;">
+                <label style="display:block;margin-bottom:5px;color:#bdc3c7;">Nombre:</label>
+                <input type="text" id="rename-input" placeholder="Nuevo nombre">
+            </div>
+            <div id="icono-edit-container" style="margin-bottom:10px;display:none;">
+                <label style="display:block;margin-bottom:5px;color:#bdc3c7;">Tipo de Marcador:</label>
+                <select id="icono-edit-selector" style="width:100%;padding:8px;border-radius:5px;border:1px solid #555;background:#34495e;color:white;">
+                    <option value="">-- Marcador Normal --</option>
+                </select>
+            </div>
             <div class="modal-buttons">
                 <button class="btn-cancel" onclick="cerrarModalRename()">Cancelar</button>
                 <button class="btn-save" onclick="guardarRename()">Guardar</button>
@@ -709,6 +765,69 @@
         var medicionLayer = null;
         
         var elementosIniciales = {{ elementos | safe }};
+        
+        var iconosPoliciales = {
+            'punto_encuentro': {
+                nombre: 'Punto de Encuentro',
+                color: '#27ae60',
+                svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="12" r="10" fill="#27ae60" stroke="white" stroke-width="2"/><path d="M12 6v6l4 2" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>',
+                abrev: 'PE'
+            },
+            'sospechoso': {
+                nombre: 'Ubicacion de Sospechoso',
+                color: '#e74c3c',
+                svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="8" r="5" fill="#e74c3c" stroke="white" stroke-width="1"/><path d="M12 14c-4 0-7 2-7 5v2h14v-2c0-3-3-5-7-5z" fill="#e74c3c" stroke="white" stroke-width="1"/><text x="12" y="11" text-anchor="middle" fill="white" font-size="6" font-weight="bold">?</text></svg>',
+                abrev: 'SO'
+            },
+            'escena_crimen': {
+                nombre: 'Escena del Crimen',
+                color: '#c0392b',
+                svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><rect x="2" y="2" width="20" height="20" rx="2" fill="#c0392b" stroke="white" stroke-width="1"/><path d="M6 6l12 12M18 6L6 18" stroke="yellow" stroke-width="3"/></svg>',
+                abrev: 'EC'
+            },
+            'vehiculo': {
+                nombre: 'Vehiculo',
+                color: '#3498db',
+                svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><rect x="2" y="8" width="20" height="8" rx="2" fill="#3498db" stroke="white" stroke-width="1"/><circle cx="6" cy="16" r="2" fill="#333" stroke="white" stroke-width="1"/><circle cx="18" cy="16" r="2" fill="#333" stroke="white" stroke-width="1"/><rect x="4" y="5" width="16" height="5" rx="1" fill="#3498db" stroke="white" stroke-width="1"/></svg>',
+                abrev: 'VH'
+            },
+            'testigo': {
+                nombre: 'Testigo',
+                color: '#9b59b6',
+                svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="8" r="5" fill="#9b59b6" stroke="white" stroke-width="1"/><path d="M12 14c-4 0-7 2-7 5v2h14v-2c0-3-3-5-7-5z" fill="#9b59b6" stroke="white" stroke-width="1"/><circle cx="12" cy="7" r="3" fill="white"/><circle cx="12" cy="7" r="1.5" fill="#333"/></svg>',
+                abrev: 'TG'
+            },
+            'camara': {
+                nombre: 'Camara de Vigilancia',
+                color: '#34495e',
+                svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><rect x="3" y="6" width="14" height="12" rx="2" fill="#34495e" stroke="white" stroke-width="1"/><polygon points="17,9 22,6 22,18 17,15" fill="#34495e" stroke="white" stroke-width="1"/><circle cx="8" cy="12" r="3" fill="#e74c3c" stroke="white" stroke-width="1"/></svg>',
+                abrev: 'CV'
+            },
+            'patrulla': {
+                nombre: 'Patrulla Policial',
+                color: '#2980b9',
+                svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><rect x="2" y="10" width="20" height="7" rx="2" fill="#2980b9" stroke="white" stroke-width="1"/><circle cx="6" cy="17" r="2" fill="#333" stroke="white" stroke-width="1"/><circle cx="18" cy="17" r="2" fill="#333" stroke="white" stroke-width="1"/><rect x="4" y="6" width="16" height="5" rx="1" fill="white" stroke="#2980b9" stroke-width="1"/><rect x="9" y="3" width="6" height="3" rx="1" fill="#e74c3c"/><rect x="10" y="3" width="4" height="3" fill="#3498db"/></svg>',
+                abrev: 'PP'
+            },
+            'victima': {
+                nombre: 'Victima',
+                color: '#e67e22',
+                svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="8" r="5" fill="#e67e22" stroke="white" stroke-width="1"/><path d="M12 14c-4 0-7 2-7 5v2h14v-2c0-3-3-5-7-5z" fill="#e67e22" stroke="white" stroke-width="1"/><path d="M8 6l8 4M8 10l8-4" stroke="white" stroke-width="1.5"/></svg>',
+                abrev: 'VI'
+            },
+            'evidencia': {
+                nombre: 'Evidencia',
+                color: '#f39c12',
+                svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><rect x="4" y="4" width="16" height="16" rx="2" fill="#f39c12" stroke="white" stroke-width="1"/><text x="12" y="16" text-anchor="middle" fill="white" font-size="12" font-weight="bold">E</text><circle cx="18" cy="6" r="3" fill="#e74c3c" stroke="white" stroke-width="1"/></svg>',
+                abrev: 'EV'
+            },
+            'punto_control': {
+                nombre: 'Punto de Control',
+                color: '#1abc9c',
+                svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28"><polygon points="12,2 22,8 22,16 12,22 2,16 2,8" fill="#1abc9c" stroke="white" stroke-width="1"/><circle cx="12" cy="12" r="4" fill="white"/><path d="M12 8v4l3 2" stroke="#1abc9c" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>',
+                abrev: 'PC'
+            }
+        };
         
         function calcularPuntoFinal(lat, lon, distKm, angulo) {
             var R = 6371, distRad = distKm / R, brngRad = angulo * Math.PI / 180;
@@ -964,8 +1083,31 @@
         }
         
         function agregarEtiqueta(lat, lon) {
-            var texto = document.getElementById('texto-input').value || 'Etiqueta';
-            var color = document.getElementById('color-selector').value;
+            var texto = document.getElementById('texto-input').value || '';
+            var tipoIcono = document.getElementById('icono-selector').value;
+            var iconoInfo = tipoIcono ? iconosPoliciales[tipoIcono] : null;
+            
+            if (!texto) {
+                texto = iconoInfo ? iconoInfo.nombre : 'Etiqueta';
+            }
+            
+            var iframe = document.getElementById('map-frame');
+            var L = iframe.contentWindow.L;
+            
+            var marker;
+            if (iconoInfo) {
+                var icono = L.divIcon({
+                    className: 'policia-marker',
+                    html: '<div style="background:white;border-radius:50%;padding:3px;box-shadow:0 2px 5px rgba(0,0,0,0.3);">' + iconoInfo.svg + '</div>',
+                    iconSize: [34, 34],
+                    iconAnchor: [17, 17]
+                });
+                marker = L.marker([lat, lon], {icon: icono}).addTo(elementosLayer);
+                marker.bindPopup('<b>' + texto + '</b><br>Tipo: ' + iconoInfo.nombre + '<br>Lat: ' + lat.toFixed(6) + '<br>Lon: ' + lon.toFixed(6));
+            } else {
+                marker = L.marker([lat, lon]).addTo(elementosLayer);
+                marker.bindPopup('<b>' + texto + '</b><br>Lat: ' + lat.toFixed(6) + '<br>Lon: ' + lon.toFixed(6));
+            }
             
             fetch('/api/agregar-etiqueta', {
                 method: 'POST',
@@ -974,16 +1116,17 @@
                     lat: lat,
                     lon: lon,
                     texto: texto,
-                    color: color
+                    color: iconoInfo ? iconoInfo.color : '#3498db',
+                    icono: tipoIcono
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    dibujarElementoEnMapa(data.elemento);
+                    data.elemento._layer = marker;
                     elementosEnMapa.push(data.elemento);
                     actualizarListaElementos();
-                    actualizarStatus('Etiqueta agregada: ' + texto);
+                    actualizarStatus((iconoInfo ? iconoInfo.nombre : 'Etiqueta') + ' agregado: ' + texto);
                 }
             });
             
@@ -1035,8 +1178,22 @@
                 layer.bindPopup(elemento.nombre);
                 
             } else if (elemento.tipo === 'etiqueta') {
-                layer = L.marker([elemento.lat, elemento.lon]).addTo(elementosLayer);
-                layer.bindPopup(elemento.texto);
+                var tipoIcono = elemento.icono || '';
+                var iconoInfo = tipoIcono ? iconosPoliciales[tipoIcono] : null;
+                
+                if (iconoInfo) {
+                    var icono = L.divIcon({
+                        className: 'policia-marker',
+                        html: '<div style="background:white;border-radius:50%;padding:3px;box-shadow:0 2px 5px rgba(0,0,0,0.3);">' + iconoInfo.svg + '</div>',
+                        iconSize: [34, 34],
+                        iconAnchor: [17, 17]
+                    });
+                    layer = L.marker([elemento.lat, elemento.lon], {icon: icono}).addTo(elementosLayer);
+                    layer.bindPopup('<b>' + elemento.texto + '</b><br>Tipo: ' + iconoInfo.nombre);
+                } else {
+                    layer = L.marker([elemento.lat, elemento.lon]).addTo(elementosLayer);
+                    layer.bindPopup('<b>' + elemento.texto + '</b>');
+                }
                 
             } else if (elemento.tipo === 'torre') {
                 var color = elemento.color || '#e74c3c';
@@ -1105,6 +1262,24 @@
             elementoRenombrando = elem;
             var nombreActual = elem.nombre || elem.texto || '';
             document.getElementById('rename-input').value = nombreActual;
+            
+            var iconoContainer = document.getElementById('icono-edit-container');
+            var iconoSelect = document.getElementById('icono-edit-selector');
+            
+            if (elem.tipo === 'etiqueta') {
+                iconoSelect.innerHTML = '<option value="">-- Marcador Normal --</option>';
+                for (var key in iconosPoliciales) {
+                    var opt = document.createElement('option');
+                    opt.value = key;
+                    opt.textContent = iconosPoliciales[key].nombre;
+                    iconoSelect.appendChild(opt);
+                }
+                iconoSelect.value = elem.icono || '';
+                iconoContainer.style.display = 'block';
+            } else {
+                iconoContainer.style.display = 'none';
+            }
+            
             document.getElementById('modal-rename').classList.add('show');
             document.getElementById('rename-input').focus();
         }
@@ -1124,14 +1299,27 @@
             }
             
             var elemId = elementoRenombrando.id;
+            var nuevoIcono = null;
+            var iconoCambio = false;
+            
+            if (elementoRenombrando.tipo === 'etiqueta') {
+                nuevoIcono = document.getElementById('icono-edit-selector').value;
+                iconoCambio = (nuevoIcono !== (elementoRenombrando.icono || ''));
+            }
+            
+            var bodyData = {
+                nombre: nuevoNombre,
+                texto: nuevoNombre
+            };
+            
+            if (elementoRenombrando.tipo === 'etiqueta') {
+                bodyData.icono = nuevoIcono;
+            }
             
             fetch('/api/actualizar-elemento/' + elemId, {
                 method: 'PATCH',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    nombre: nuevoNombre,
-                    texto: nuevoNombre
-                })
+                body: JSON.stringify(bodyData)
             })
             .then(response => response.json())
             .then(data => {
@@ -1140,22 +1328,35 @@
                     if (elem) {
                         if (elem.tipo === 'etiqueta') {
                             elem.texto = nuevoNombre;
+                            elem.icono = nuevoIcono;
+                            
+                            if (iconoCambio && elem._layer) {
+                                var iframe = document.getElementById('map-frame');
+                                var L = iframe.contentWindow.L;
+                                var elementosLayer = iframe.contentWindow.elementosLayer;
+                                
+                                elementosLayer.removeLayer(elem._layer);
+                                dibujarElementoEnMapa(elem);
+                            } else if (elem._layer) {
+                                var iconoInfo = nuevoIcono ? iconosPoliciales[nuevoIcono] : null;
+                                var popupText = iconoInfo ? '<b>' + nuevoNombre + '</b><br>Tipo: ' + iconoInfo.nombre : nuevoNombre;
+                                elem._layer.setPopupContent(popupText);
+                            }
                         } else {
                             elem.nombre = nuevoNombre;
-                        }
-                        
-                        if (elem._layer && elem._layer.getPopup()) {
-                            elem._layer.setPopupContent(nuevoNombre);
-                        } else if (elem._layer) {
-                            elem._layer.bindPopup(nuevoNombre);
+                            if (elem._layer && elem._layer.getPopup()) {
+                                elem._layer.setPopupContent(nuevoNombre);
+                            } else if (elem._layer) {
+                                elem._layer.bindPopup(nuevoNombre);
+                            }
                         }
                     }
                     
                     actualizarListaElementos();
-                    actualizarStatus('Elemento renombrado: ' + nuevoNombre);
+                    actualizarStatus('Elemento actualizado: ' + nuevoNombre);
                     cerrarModalRename();
                 } else {
-                    alert('Error al renombrar: ' + (data.mensaje || 'Error desconocido'));
+                    alert('Error al actualizar: ' + (data.mensaje || 'Error desconocido'));
                 }
             })
             .catch(function(err) {
@@ -1225,7 +1426,18 @@
             
             var html = '';
             elementosEnMapa.forEach(function(elem) {
-                var icono = elem.tipo === 'ruta' ? '~' : (elem.tipo === 'etiqueta' ? 'A' : (elem.tipo === 'torre' ? 'T' : 'O'));
+                var icono = '?';
+                if (elem.tipo === 'ruta') {
+                    icono = '~';
+                } else if (elem.tipo === 'etiqueta') {
+                    var tipoIcono = elem.icono || 'punto_encuentro';
+                    var iconoInfo = iconosPoliciales[tipoIcono];
+                    icono = iconoInfo ? iconoInfo.abrev : 'ET';
+                } else if (elem.tipo === 'torre') {
+                    icono = 'BTS';
+                } else if (elem.tipo === 'circulo') {
+                    icono = 'O';
+                }
                 var nombre = elem.nombre || elem.texto || 'Elemento';
                 var editarFunc = elem.tipo === 'torre' ? 'abrirModalEditarTorre(' + elem.id + ')' : 'abrirModalRename(' + elem.id + ')';
                 var oculto = elem._oculto ? true : false;
