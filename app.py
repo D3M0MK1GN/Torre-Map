@@ -579,6 +579,72 @@ def exportar_kmz():
     except Exception as e:
         return jsonify({'success': False, 'mensaje': str(e)}), 500
 
+@app.route('/api/export/radio-bts-excel')
+def exportar_radio_bts_excel():
+    """Exporta las coordenadas de Radio BTS a Excel."""
+    try:
+        import pandas as pd
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        
+        elementos = cargar_elementos()
+        torres = [e for e in elementos if e.get('tipo') == 'torre']
+        
+        if not torres:
+            return jsonify({'success': False, 'mensaje': 'No hay Radio BTS agregadas para exportar'}), 400
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Radio BTS"
+        
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+        header_alignment = Alignment(horizontal="center", vertical="center")
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        headers = ["No.", "Nombre", "Latitud", "Longitud", "Radio (m)", "Color"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
+        
+        for idx, torre in enumerate(torres, 1):
+            row = idx + 1
+            ws.cell(row=row, column=1, value=idx).border = thin_border
+            ws.cell(row=row, column=2, value=torre.get('nombre', f'Torre {idx}')).border = thin_border
+            ws.cell(row=row, column=3, value=torre.get('lat', 0)).border = thin_border
+            ws.cell(row=row, column=4, value=torre.get('lon', 0)).border = thin_border
+            ws.cell(row=row, column=5, value=torre.get('radio', 500)).border = thin_border
+            ws.cell(row=row, column=6, value=torre.get('color', '#e74c3c')).border = thin_border
+        
+        ws.column_dimensions['A'].width = 8
+        ws.column_dimensions['B'].width = 30
+        ws.column_dimensions['C'].width = 18
+        ws.column_dimensions['D'].width = 18
+        ws.column_dimensions['E'].width = 12
+        ws.column_dimensions['F'].width = 12
+        
+        excel_buffer = io.BytesIO()
+        wb.save(excel_buffer)
+        excel_buffer.seek(0)
+        
+        return Response(
+            excel_buffer.getvalue(),
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={
+                'Content-Disposition': 'attachment; filename=radio_bts_coordenadas.xlsx'
+            }
+        )
+    except Exception as e:
+        return jsonify({'success': False, 'mensaje': str(e)}), 500
+
 def set_mapa_archivo(archivo):
     """Configura el archivo de mapa a usar."""
     os.environ['MAPA_HTML'] = archivo

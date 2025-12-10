@@ -652,6 +652,10 @@
                 <strong>KMZ</strong> - KML Comprimido<br>
                 <small>Archivo comprimido, incluye iconos</small>
             </button>
+            <button class="export-btn" style="background:#27ae60;color:white;" onclick="exportarRadioBTS()">
+                <strong>Excel Radio BTS</strong><br>
+                <small>Exportar coordenadas de torres en Excel</small>
+            </button>
             <div class="modal-buttons" style="margin-top:15px;">
                 <button class="btn-cancel" onclick="cerrarModalExportar()">Cancelar</button>
             </div>
@@ -1175,7 +1179,12 @@
                     color: elemento.color,
                     weight: elemento.grosor
                 }).addTo(elementosLayer);
-                layer.bindPopup(elemento.nombre);
+                layer.bindPopup('<b>' + elemento.nombre + '</b><br><button onclick="window.parent.eliminarRutaDesdePopup(' + elemento.id + ')" style="background:#e74c3c;color:white;border:none;padding:8px 15px;border-radius:4px;cursor:pointer;margin-top:5px;width:100%;">Eliminar Ruta</button>');
+                
+                layer.on('dblclick', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    layer.openPopup();
+                });
                 
             } else if (elemento.tipo === 'etiqueta') {
                 var tipoIcono = elemento.icono || '';
@@ -1254,6 +1263,14 @@
                 }
             });
         }
+        
+        function eliminarRutaDesdePopup(id) {
+            if (confirm('¿Esta seguro de eliminar esta ruta?')) {
+                eliminarElemento(id);
+            }
+        }
+        
+        window.eliminarRutaDesdePopup = eliminarRutaDesdePopup;
         
         function abrirModalRename(id) {
             var elem = elementosEnMapa.find(e => e.id === id);
@@ -1948,6 +1965,36 @@
             .catch(err => {
                 actualizarStatus('Error al exportar: ' + err.message);
                 alert('Error al exportar el mapa. Intente de nuevo.');
+            });
+        }
+        
+        function exportarRadioBTS() {
+            actualizarStatus('Exportando Radio BTS a Excel...');
+            cerrarModalExportar();
+            
+            fetch('/api/export/radio-bts-excel')
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.mensaje || 'Error al exportar');
+                    });
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'radio_bts_coordenadas.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+                actualizarStatus('Radio BTS exportadas exitosamente a Excel');
+            })
+            .catch(err => {
+                actualizarStatus('Error al exportar: ' + err.message);
+                alert(err.message);
             });
         }
         
