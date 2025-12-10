@@ -290,7 +290,7 @@
             color: #bdc3c7;
         }
         
-        #modal-rename, #modal-tipo-elemento {
+        #modal-rename, #modal-tipo-elemento, #modal-editar-torre {
             display: none;
             position: fixed;
             top: 0;
@@ -303,7 +303,7 @@
             justify-content: center;
         }
         
-        #modal-rename.show, #modal-tipo-elemento.show {
+        #modal-rename.show, #modal-tipo-elemento.show, #modal-editar-torre.show {
             display: flex;
         }
         
@@ -504,6 +504,32 @@
         </div>
     </div>
     
+    <div id="modal-editar-torre">
+        <div class="modal-content">
+            <h3>Editar Torre Telefonica</h3>
+            <div style="margin-bottom:10px;">
+                <label style="display:block;margin-bottom:5px;color:#bdc3c7;">Nombre de la Antena:</label>
+                <input type="text" id="editar-nombre-torre" placeholder="Nombre de la torre" style="width:100%;padding:8px;border:none;border-radius:4px;">
+            </div>
+            <div style="margin-bottom:10px;">
+                <label style="display:block;margin-bottom:5px;color:#bdc3c7;">Radio en metros:</label>
+                <input type="number" id="editar-radio-torre" min="50" max="10000" style="width:100%;padding:8px;border:none;border-radius:4px;">
+            </div>
+            <div style="margin-bottom:10px;">
+                <label style="display:block;margin-bottom:5px;color:#bdc3c7;">Color del radio:</label>
+                <input type="color" id="editar-color-torre" style="width:100%;height:35px;border:none;border-radius:4px;cursor:pointer;">
+            </div>
+            <div style="margin-bottom:10px;">
+                <label style="display:block;margin-bottom:5px;color:#bdc3c7;">Grosor de linea:</label>
+                <input type="number" id="editar-grosor-torre" min="1" max="10" style="width:100%;padding:8px;border:none;border-radius:4px;">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="cerrarModalEditarTorre()">Cancelar</button>
+                <button class="btn-save" onclick="guardarEditarTorre()">Guardar</button>
+            </div>
+        </div>
+    </div>
+    
     <div id="modal-tipo-elemento">
         <div class="modal-content">
             <h3>Seleccione Tipo de Elemento</h3>
@@ -521,8 +547,22 @@
                 Marcador Normal
             </button>
             <div id="radio-torre-group">
-                <label>Radio en metros:</label>
-                <input type="number" id="radio-torre-input" value="500" min="50" max="10000">
+                <div style="margin-bottom:10px;">
+                    <label>Nombre de la Antena:</label>
+                    <input type="text" id="nombre-torre-input" placeholder="Ej: Torre Central" style="width:100%;padding:8px;border:none;border-radius:4px;margin-top:5px;">
+                </div>
+                <div style="margin-bottom:10px;">
+                    <label>Radio en metros:</label>
+                    <input type="number" id="radio-torre-input" value="500" min="50" max="10000" style="width:100%;padding:8px;border:none;border-radius:4px;margin-top:5px;">
+                </div>
+                <div style="margin-bottom:10px;">
+                    <label>Color del radio:</label>
+                    <input type="color" id="color-torre-input" value="#e74c3c" style="width:100%;height:35px;border:none;border-radius:4px;margin-top:5px;cursor:pointer;">
+                </div>
+                <div style="margin-bottom:10px;">
+                    <label>Grosor de linea:</label>
+                    <input type="number" id="grosor-torre-input" value="2" min="1" max="10" style="width:100%;padding:8px;border:none;border-radius:4px;margin-top:5px;">
+                </div>
                 <button class="tool-btn success" style="margin-top:10px;" onclick="confirmarTorre()">
                     Agregar Torre
                 </button>
@@ -542,6 +582,7 @@
         var elementosLayer = null;
         var elementoRenombrando = null;
         var coordenadasPendientes = null;
+        var torreEditando = null;
         
         var elementosIniciales = {{ elementos | safe }};
         
@@ -823,6 +864,30 @@
                 layer = L.marker([elemento.lat, elemento.lon]).addTo(elementosLayer);
                 layer.bindPopup(elemento.texto);
                 
+            } else if (elemento.tipo === 'torre') {
+                var color = elemento.color || '#e74c3c';
+                var grosor = elemento.grosor || 2;
+                
+                var icono = L.divIcon({
+                    className: 'custom-marker',
+                    html: '<div style="background:' + color + ';color:white;padding:5px 10px;border-radius:50%;font-weight:bold;font-size:14px;text-align:center;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">T</div>',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                });
+                
+                var marker = L.marker([elemento.lat, elemento.lon], {icon: icono}).addTo(elementosLayer);
+                marker.bindPopup('<b>' + elemento.nombre + '</b><br>Radio: ' + elemento.radio + 'm');
+                elemento._marker = marker;
+                
+                layer = L.circle([elemento.lat, elemento.lon], {
+                    radius: elemento.radio,
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: 0.15,
+                    weight: grosor
+                }).addTo(elementosLayer);
+                layer.bindPopup(elemento.nombre);
+                
             } else if (elemento.tipo === 'circulo') {
                 layer = L.circle([elemento.lat, elemento.lon], {
                     radius: elemento.radio,
@@ -843,8 +908,13 @@
             .then(data => {
                 if (data.success) {
                     var elem = elementosEnMapa.find(e => e.id === id);
-                    if (elem && elem._layer) {
-                        elementosLayer.removeLayer(elem._layer);
+                    if (elem) {
+                        if (elem._layer) {
+                            elementosLayer.removeLayer(elem._layer);
+                        }
+                        if (elem._marker) {
+                            elementosLayer.removeLayer(elem._marker);
+                        }
                     }
                     elementosEnMapa = elementosEnMapa.filter(e => e.id !== id);
                     actualizarListaElementos();
@@ -980,12 +1050,13 @@
             
             var html = '';
             elementosEnMapa.forEach(function(elem) {
-                var icono = elem.tipo === 'ruta' ? '~' : (elem.tipo === 'etiqueta' ? 'A' : 'O');
+                var icono = elem.tipo === 'ruta' ? '~' : (elem.tipo === 'etiqueta' ? 'A' : (elem.tipo === 'torre' ? 'T' : 'O'));
                 var nombre = elem.nombre || elem.texto || 'Elemento';
+                var editarFunc = elem.tipo === 'torre' ? 'abrirModalEditarTorre(' + elem.id + ')' : 'abrirModalRename(' + elem.id + ')';
                 html += '<div class="elemento-item">' +
-                    '<span class="elem-nombre" onclick="abrirModalRename(' + elem.id + ')" title="Click para renombrar">[' + icono + '] ' + nombre + '</span>' +
+                    '<span class="elem-nombre" onclick="' + editarFunc + '" title="Click para editar">[' + icono + '] ' + nombre + '</span>' +
                     '<div class="elem-actions">' +
-                    '<button class="action-btn edit-btn" onclick="abrirModalRename(' + elem.id + ')" title="Renombrar">&#9998;</button>' +
+                    '<button class="action-btn edit-btn" onclick="' + editarFunc + '" title="Editar">&#9998;</button>' +
                     '<button class="action-btn delete-btn" onclick="eliminarElemento(' + elem.id + ')" title="Eliminar">X</button>' +
                     '</div></div>';
             });
@@ -1112,7 +1183,11 @@
         function confirmarTorre() {
             if (!coordenadasPendientes) return;
             
+            var nombre = document.getElementById('nombre-torre-input').value.trim() || 'Torre Telefonica';
             var radio = parseInt(document.getElementById('radio-torre-input').value);
+            var color = document.getElementById('color-torre-input').value;
+            var grosor = parseInt(document.getElementById('grosor-torre-input').value) || 2;
+            
             if (isNaN(radio) || radio < 50 || radio > 10000) {
                 alert('Radio invalido. Use un valor entre 50 y 10000 metros.');
                 return;
@@ -1122,11 +1197,10 @@
             var L = iframe.contentWindow.L;
             var lat = coordenadasPendientes.lat;
             var lon = coordenadasPendientes.lon;
-            var nombre = 'Torre Telefonica';
             
             var icono = L.divIcon({
                 className: 'custom-marker',
-                html: '<div style="background:#e74c3c;color:white;padding:5px 10px;border-radius:50%;font-weight:bold;font-size:14px;text-align:center;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">T</div>',
+                html: '<div style="background:' + color + ';color:white;padding:5px 10px;border-radius:50%;font-weight:bold;font-size:14px;text-align:center;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">T</div>',
                 iconSize: [40, 40],
                 iconAnchor: [20, 20]
             });
@@ -1136,21 +1210,22 @@
             
             var circle = L.circle([lat, lon], {
                 radius: radio,
-                color: '#e74c3c',
-                fillColor: '#e74c3c',
+                color: color,
+                fillColor: color,
                 fillOpacity: 0.15,
-                weight: 2
+                weight: grosor
             }).addTo(elementosLayer);
             
-            fetch('/api/agregar-circulo', {
+            fetch('/api/agregar-torre', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     lat: lat,
                     lon: lon,
                     radio: radio,
-                    color: '#e74c3c',
-                    nombre: nombre + ' (R:' + radio + 'm)'
+                    color: color,
+                    grosor: grosor,
+                    nombre: nombre
                 })
             })
             .then(response => response.json())
@@ -1164,8 +1239,102 @@
                 }
             });
             
+            document.getElementById('nombre-torre-input').value = '';
             cerrarModalTipo();
         }
+        
+        function abrirModalEditarTorre(id) {
+            var elem = elementosEnMapa.find(e => e.id === id);
+            if (!elem || elem.tipo !== 'torre') {
+                abrirModalRename(id);
+                return;
+            }
+            
+            torreEditando = elem;
+            document.getElementById('editar-nombre-torre').value = elem.nombre || 'Torre Telefonica';
+            document.getElementById('editar-radio-torre').value = elem.radio || 500;
+            document.getElementById('editar-color-torre').value = elem.color || '#e74c3c';
+            document.getElementById('editar-grosor-torre').value = elem.grosor || 2;
+            document.getElementById('modal-editar-torre').classList.add('show');
+            document.getElementById('editar-nombre-torre').focus();
+        }
+        
+        function cerrarModalEditarTorre() {
+            document.getElementById('modal-editar-torre').classList.remove('show');
+            torreEditando = null;
+        }
+        
+        function guardarEditarTorre() {
+            if (!torreEditando) return;
+            
+            var nombre = document.getElementById('editar-nombre-torre').value.trim();
+            var radio = parseInt(document.getElementById('editar-radio-torre').value);
+            var color = document.getElementById('editar-color-torre').value;
+            var grosor = parseInt(document.getElementById('editar-grosor-torre').value);
+            
+            if (!nombre) {
+                alert('El nombre no puede estar vacio');
+                return;
+            }
+            
+            if (isNaN(radio) || radio < 50 || radio > 10000) {
+                alert('Radio invalido. Use un valor entre 50 y 10000 metros.');
+                return;
+            }
+            
+            if (isNaN(grosor) || grosor < 1 || grosor > 10) {
+                grosor = 2;
+            }
+            
+            var elemId = torreEditando.id;
+            
+            fetch('/api/actualizar-torre/' + elemId, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    nombre: nombre,
+                    radio: radio,
+                    color: color,
+                    grosor: grosor
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    var elem = elementosEnMapa.find(e => e.id === elemId);
+                    if (elem) {
+                        if (elem._layer) {
+                            elementosLayer.removeLayer(elem._layer);
+                        }
+                        if (elem._marker) {
+                            elementosLayer.removeLayer(elem._marker);
+                        }
+                        
+                        elem.nombre = nombre;
+                        elem.radio = radio;
+                        elem.color = color;
+                        elem.grosor = grosor;
+                        
+                        dibujarElementoEnMapa(elem);
+                    }
+                    
+                    actualizarListaElementos();
+                    actualizarStatus('Torre actualizada: ' + nombre);
+                    cerrarModalEditarTorre();
+                } else {
+                    alert('Error al actualizar: ' + (data.mensaje || 'Error desconocido'));
+                }
+            })
+            .catch(function(err) {
+                alert('Error de conexion');
+            });
+        }
+        
+        document.getElementById('editar-nombre-torre').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                guardarEditarTorre();
+            }
+        });
     </script>
 </body>
 </html>

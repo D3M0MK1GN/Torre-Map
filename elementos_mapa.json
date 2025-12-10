@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "id": 1,
+    "tipo": "torre",
+    "lat": 9.92575,
+    "lon": -69.623111,
+    "radio": 500,
+    "color": "#ed333b",
+    "grosor": 1,
+    "nombre": "Digitel"
+  },
+  {
+    "id": 2,
+    "tipo": "etiqueta",
+    "lat": 9.92575,
+    "lon": -69.624111,
+    "texto": "Punto de Encuentro",
+    "color": "#27ae60",
+    "icono": "info"
+  },
+  {
+    "id": 3,
+    "tipo": "etiqueta",
+    "lat": 9.82575,
+    "lon": -69.624111,
+    "texto": "Focus",
+    "color": "#f39c12",
+    "icono": "info"
+  }
+]

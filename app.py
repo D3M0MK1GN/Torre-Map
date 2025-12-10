@@ -131,6 +131,46 @@ def agregar_circulo():
     guardar_elementos(elementos)
     return jsonify({'success': True, 'elemento': elemento})
 
+@app.route('/api/agregar-torre', methods=['POST'])
+def agregar_torre():
+    """Agrega una nueva torre telefónica al mapa."""
+    elementos = cargar_elementos()
+    data = request.json
+    elemento = {
+        'id': obtener_siguiente_id(),
+        'tipo': 'torre',
+        'lat': data.get('lat'),
+        'lon': data.get('lon'),
+        'radio': data.get('radio', 500),
+        'color': data.get('color', '#e74c3c'),
+        'grosor': data.get('grosor', 2),
+        'nombre': data.get('nombre', f'Torre Telefonica {len(elementos) + 1}')
+    }
+    elementos.append(elemento)
+    guardar_elementos(elementos)
+    return jsonify({'success': True, 'elemento': elemento})
+
+@app.route('/api/actualizar-torre/<int:elemento_id>', methods=['PATCH'])
+def actualizar_torre(elemento_id):
+    """Actualiza una torre telefónica existente."""
+    elementos = cargar_elementos()
+    data = request.json
+    
+    for elem in elementos:
+        if elem['id'] == elemento_id:
+            if 'nombre' in data:
+                elem['nombre'] = data['nombre']
+            if 'radio' in data:
+                elem['radio'] = data['radio']
+            if 'color' in data:
+                elem['color'] = data['color']
+            if 'grosor' in data:
+                elem['grosor'] = data['grosor']
+            guardar_elementos(elementos)
+            return jsonify({'success': True, 'elemento': elem})
+    
+    return jsonify({'success': False, 'mensaje': 'Elemento no encontrado'}), 404
+
 @app.route('/api/eliminar-elemento/<int:elemento_id>', methods=['DELETE'])
 def eliminar_elemento(elemento_id):
     """Elimina un elemento del mapa."""
@@ -253,6 +293,24 @@ def generar_script_elementos(elementos):
             }} else if (elem.tipo === 'etiqueta') {{
                 L.marker([elem.lat, elem.lon]).addTo(mapInstance)
                     .bindPopup(elem.texto);
+            }} else if (elem.tipo === 'torre') {{
+                var torreColor = elem.color || '#e74c3c';
+                var torreGrosor = elem.grosor || 2;
+                var torreIcono = L.divIcon({{
+                    className: 'custom-marker',
+                    html: '<div style="background:' + torreColor + ';color:white;padding:5px 10px;border-radius:50%;font-weight:bold;font-size:14px;text-align:center;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">T</div>',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                }});
+                L.marker([elem.lat, elem.lon], {{icon: torreIcono}}).addTo(mapInstance)
+                    .bindPopup('<b>' + elem.nombre + '</b><br>Radio: ' + elem.radio + 'm');
+                L.circle([elem.lat, elem.lon], {{
+                    radius: elem.radio,
+                    color: torreColor,
+                    fillColor: torreColor,
+                    fillOpacity: 0.15,
+                    weight: torreGrosor
+                }}).addTo(mapInstance).bindPopup(elem.nombre);
             }} else if (elem.tipo === 'circulo') {{
                 L.circle([elem.lat, elem.lon], {{
                     radius: elem.radio,

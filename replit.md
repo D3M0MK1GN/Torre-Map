@@ -36,6 +36,12 @@ python mapa_torres.py --servidor --html mapa_existente.html
 - **Dibujar Rutas**: Click en puntos, doble click para finalizar
 - **Agregar Etiquetas**: Marcadores con texto personalizado
 - **Agregar Círculos**: Áreas circulares con radio configurable
+- **Torres Telefónicas**: Marcadores especiales con:
+  - Nombre/etiqueta personalizada
+  - Radio configurable (metros)
+  - Color del radio seleccionable
+  - Grosor de línea ajustable
+  - Edición completa después de crear (nombre, radio, color, grosor)
 - **Selector de Color**: Personalización de elementos
 - **Deshacer/Limpiar**: Control de cambios
 - **Guardar Mapa**: Exporta como nuevo HTML con todos los cambios
