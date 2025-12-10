@@ -1190,7 +1190,20 @@
                 var tipoIcono = elemento.icono || '';
                 var iconoInfo = tipoIcono ? iconosPoliciales[tipoIcono] : null;
                 
-                if (iconoInfo) {
+                if (tipoIcono && tipoIcono.startsWith('data:image')) {
+                    var icono = L.icon({
+                        iconUrl: tipoIcono,
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 32],
+                        popupAnchor: [0, -32]
+                    });
+                    layer = L.marker([elemento.lat, elemento.lon], {icon: icono}).addTo(elementosLayer);
+                    var popupContent = '<b>' + elemento.texto + '</b>';
+                    if (elemento.descripcion) {
+                        popupContent += '<br>' + elemento.descripcion;
+                    }
+                    layer.bindPopup(popupContent);
+                } else if (iconoInfo) {
                     var icono = L.divIcon({
                         className: 'policia-marker',
                         html: '<div style="background:white;border-radius:50%;padding:3px;box-shadow:0 2px 5px rgba(0,0,0,0.3);">' + iconoInfo.svg + '</div>',

@@ -278,6 +278,80 @@ def extraer_placemarks_con_estilos(contenido_kml):
                         })
     return placemarks
 
+def guardar_elementos_json(elementos, archivo='elementos_mapa.json'):
+    """Guarda los elementos en el archivo JSON para el editor."""
+    with open(archivo, 'w', encoding='utf-8') as f:
+        json.dump(elementos, f, ensure_ascii=False, indent=2)
+    print(f"Elementos guardados en: {archivo}")
+
+def convertir_placemarks_a_elementos(placemarks, estilos, style_maps, iconos_base64):
+    """Convierte los placemarks del KMZ al formato del editor."""
+    elementos = []
+    id_counter = 1
+    
+    for p in placemarks:
+        if p['tipo'] == 'punto':
+            icono_url = None
+            if p.get('style_url'):
+                style_id = p['style_url']
+                href = None
+                if style_id in style_maps:
+                    href = style_maps[style_id]
+                elif style_id in estilos:
+                    href = estilos[style_id]
+                elif style_id + '-normal' in estilos:
+                    href = estilos[style_id + '-normal']
+                if href and href in iconos_base64:
+                    icono_url = iconos_base64[href]
+            
+            elemento = {
+                'id': id_counter,
+                'tipo': 'etiqueta',
+                'lat': p['lat'],
+                'lon': p['lon'],
+                'texto': p['nombre'] or f"Punto {id_counter}",
+                'descripcion': p.get('desc', ''),
+                'color': '#3388ff',
+                'icono': icono_url or ''
+            }
+            elementos.append(elemento)
+            id_counter += 1
+            
+        elif p['tipo'] == 'linea':
+            puntos = [[coord[0], coord[1]] for coord in p['coords']]
+            elemento = {
+                'id': id_counter,
+                'tipo': 'ruta',
+                'puntos': puntos,
+                'color': '#0000FF',
+                'grosor': 3,
+                'nombre': p['nombre'] or f"Ruta {id_counter}"
+            }
+            elementos.append(elemento)
+            id_counter += 1
+            
+        elif p['tipo'] == 'poligono':
+            if p['coords']:
+                lat_centro = sum(c[0] for c in p['coords']) / len(p['coords'])
+                lon_centro = sum(c[1] for c in p['coords']) / len(p['coords'])
+                radio_aprox = max(
+                    ((c[0] - lat_centro)**2 + (c[1] - lon_centro)**2)**0.5 * 111000
+                    for c in p['coords']
+                )
+                elemento = {
+                    'id': id_counter,
+                    'tipo': 'circulo',
+                    'lat': lat_centro,
+                    'lon': lon_centro,
+                    'radio': int(radio_aprox),
+                    'color': '#00FF00',
+                    'nombre': p['nombre'] or f"Poligono {id_counter}"
+                }
+                elementos.append(elemento)
+                id_counter += 1
+    
+    return elementos
+
 def importar_kml_kmz(archivo, guardar_como=None):
     print(f"Importando archivo: {archivo}")
     contenido = leer_contenido_kml(archivo)
@@ -303,40 +377,15 @@ def importar_kml_kmz(archivo, guardar_como=None):
     
     print(f"Elementos: {len(puntos)} puntos, {len(lineas)} lineas, {len(poligonos)} poligonos")
     
+    elementos_editor = convertir_placemarks_a_elementos(placemarks, estilos, style_maps, iconos_base64)
+    guardar_elementos_json(elementos_editor)
+    print(f"Se han registrado {len(elementos_editor)} elementos para edicion")
+    
     todas = [(p['lat'], p['lon']) for p in puntos]
     for l in lineas: todas.extend(l['coords'])
     for p in poligonos: todas.extend(p['coords'])
     
     m = crear_mapa_base(sum(c[0] for c in todas)/len(todas), sum(c[1] for c in todas)/len(todas))
-    
-    for p in puntos:
-        popup = f"<b>{p['nombre']}</b><br>{p['desc']}" if p['nombre'] or p['desc'] else f"Lat: {p['lat']:.4f}, Lon: {p['lon']:.4f}"
-        icono_url = None
-        if p.get('style_url'):
-            style_id = p['style_url']
-            href = None
-            if style_id in style_maps:
-                href = style_maps[style_id]
-            elif style_id in estilos:
-                href = estilos[style_id]
-            elif style_id + '-normal' in estilos:
-                href = estilos[style_id + '-normal']
-            if href and href in iconos_base64:
-                icono_url = iconos_base64[href]
-        
-        if icono_url:
-            icono = CustomIcon(icono_url, icon_size=(32, 32), icon_anchor=(16, 32))
-            folium.Marker([p['lat'], p['lon']], popup=popup, tooltip=p['nombre'] or None, icon=icono).add_to(m)
-        else:
-            folium.Marker([p['lat'], p['lon']], popup=popup, tooltip=p['nombre'] or None).add_to(m)
-    
-    for l in lineas:
-        popup = f"<b>{l['nombre']}</b><br>{l['desc']}" if l['nombre'] or l['desc'] else None
-        folium.PolyLine(l['coords'], color='blue', weight=3, popup=popup).add_to(m)
-    
-    for p in poligonos:
-        popup = f"<b>{p['nombre']}</b><br>{p['desc']}" if p['nombre'] or p['desc'] else None
-        folium.Polygon(p['coords'], color='green', fill=True, fillOpacity=0.3, popup=popup).add_to(m)
     
     folium.LayerControl(position='topleft', collapsed=False).add_to(m)
     return guardar_mapa(m, guardar_como, 'mapa_kml')

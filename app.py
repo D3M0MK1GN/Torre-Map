@@ -645,10 +645,10 @@ def exportar_radio_bts_excel():
     except Exception as e:
         return jsonify({'success': False, 'mensaje': str(e)}), 500
 
-def set_mapa_archivo(archivo):
+def set_mapa_archivo(archivo, mantener_elementos=True):
     """Configura el archivo de mapa a usar."""
     os.environ['MAPA_HTML'] = archivo
-    if os.path.exists(ARCHIVO_ELEMENTOS):
+    if not mantener_elementos and os.path.exists(ARCHIVO_ELEMENTOS):
         os.remove(ARCHIVO_ELEMENTOS)
 
 if __name__ == '__main__':

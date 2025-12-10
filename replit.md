@@ -61,6 +61,10 @@ python mapa_torres.py --servidor --html mapa_existente.html
 - **Selector de Color**: Personalización de elementos
 - **Deshacer/Limpiar**: Control de cambios
 - **Guardar Mapa**: Exporta como nuevo HTML con todos los cambios
+- **Importar KMZ/KML**: Carga archivos de Google Earth con:
+  - Marcadores con iconos personalizados (preservados en base64)
+  - Líneas y rutas con estilos
+  - Todos los elementos importados son completamente editables
 
 ## Dependencias
 - pandas
