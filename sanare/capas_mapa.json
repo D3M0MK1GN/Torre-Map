@@ -1,0 +1,14 @@
+[
+  {
+    "id": 2,
+    "nombre": "San Antonio",
+    "color": "#3498db",
+    "visible": true
+  },
+  {
+    "id": 3,
+    "nombre": "Sector Santa Ana Interes",
+    "color": "#3498db",
+    "visible": true
+  }
+]

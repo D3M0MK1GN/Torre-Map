@@ -10,6 +10,29 @@ from datetime import datetime
 app = Flask(__name__)
 
 ARCHIVO_ELEMENTOS = 'elementos_mapa.json'
+ARCHIVO_CAPAS = 'capas_mapa.json'
+
+def cargar_capas():
+    """Carga las capas desde el archivo JSON."""
+    if os.path.exists(ARCHIVO_CAPAS):
+        try:
+            with open(ARCHIVO_CAPAS, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
+def guardar_capas(capas):
+    """Guarda las capas en el archivo JSON."""
+    with open(ARCHIVO_CAPAS, 'w', encoding='utf-8') as f:
+        json.dump(capas, f, ensure_ascii=False, indent=2)
+
+def obtener_siguiente_id_capa():
+    """Obtiene el siguiente ID para una capa."""
+    capas = cargar_capas()
+    if not capas:
+        return 1
+    return max(c.get('id', 0) for c in capas) + 1
 
 def obtener_archivo_mapa():
     """Obtiene el archivo de mapa actual desde variable de entorno."""
@@ -72,7 +95,8 @@ def editor():
         return "Error: No se ha cargado ningún mapa. Ejecute el script con la opción de servidor.", 404
     
     elementos = inicializar_elementos()
-    return render_template('editor.html', mapa_contenido=mapa_html, elementos=json.dumps(elementos))
+    capas = cargar_capas()
+    return render_template('editor.html', mapa_contenido=mapa_html, elementos=json.dumps(elementos), capas=json.dumps(capas))
 
 def obtener_siguiente_id():
     """Obtiene el siguiente ID para un elemento."""
@@ -202,6 +226,68 @@ def limpiar():
 def obtener_elementos_api():
     """Obtiene todos los elementos agregados."""
     return jsonify(cargar_elementos())
+
+@app.route('/api/capas', methods=['GET'])
+def obtener_capas_api():
+    """Obtiene todas las capas."""
+    return jsonify(cargar_capas())
+
+@app.route('/api/capas', methods=['POST'])
+def crear_capa():
+    """Crea una nueva capa."""
+    data = request.json
+    capas = cargar_capas()
+    capa = {
+        'id': obtener_siguiente_id_capa(),
+        'nombre': data.get('nombre', f'Capa {len(capas) + 1}'),
+        'color': data.get('color', '#3498db'),
+        'visible': True
+    }
+    capas.append(capa)
+    guardar_capas(capas)
+    return jsonify({'success': True, 'capa': capa})
+
+@app.route('/api/capas/<int:capa_id>', methods=['DELETE'])
+def eliminar_capa(capa_id):
+    """Elimina una capa y desasigna los elementos."""
+    capas = cargar_capas()
+    capas = [c for c in capas if c['id'] != capa_id]
+    guardar_capas(capas)
+    elementos = cargar_elementos()
+    for elem in elementos:
+        if elem.get('capa') == capa_id:
+            elem['capa'] = None
+    guardar_elementos(elementos)
+    return jsonify({'success': True})
+
+@app.route('/api/capas/<int:capa_id>', methods=['PATCH'])
+def actualizar_capa(capa_id):
+    """Actualiza una capa existente."""
+    data = request.json
+    capas = cargar_capas()
+    for capa in capas:
+        if capa['id'] == capa_id:
+            if 'nombre' in data:
+                capa['nombre'] = data['nombre']
+            if 'color' in data:
+                capa['color'] = data['color']
+            if 'visible' in data:
+                capa['visible'] = data['visible']
+            guardar_capas(capas)
+            return jsonify({'success': True, 'capa': capa})
+    return jsonify({'success': False, 'mensaje': 'Capa no encontrada'}), 404
+
+@app.route('/api/elemento/<int:elemento_id>/capa', methods=['PATCH'])
+def asignar_capa_elemento(elemento_id):
+    """Asigna una capa a un elemento."""
+    data = request.json
+    elementos = cargar_elementos()
+    for elem in elementos:
+        if elem['id'] == elemento_id:
+            elem['capa'] = data.get('capa_id')
+            guardar_elementos(elementos)
+            return jsonify({'success': True, 'elemento': elem})
+    return jsonify({'success': False, 'mensaje': 'Elemento no encontrado'}), 404
 
 @app.route('/api/actualizar-elemento/<int:elemento_id>', methods=['PATCH'])
 def actualizar_elemento(elemento_id):

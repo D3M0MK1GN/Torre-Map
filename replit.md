@@ -65,6 +65,13 @@ python mapa_torres.py --servidor --html mapa_existente.html
   - Marcadores con iconos personalizados (preservados en base64)
   - Líneas y rutas con estilos
   - Todos los elementos importados son completamente editables
+- **Gestión de Capas**: Organizar elementos por caso/proyecto:
+  - Crear capas con nombre y color identificativo
+  - Asignar elementos a capas desde la lista de elementos
+  - Toggle de visibilidad por capa (checkbox ojo)
+  - Contador de elementos por capa
+  - Persistencia en capas_mapa.json
+  - Compatible con visibilidad individual de elementos
 
 ## Dependencias
 - pandas

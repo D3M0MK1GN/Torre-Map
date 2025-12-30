@@ -611,6 +611,16 @@
             </div>
             
             <div class="toolbar-section">
+                <h3>Gestion de Capas</h3>
+                <div class="input-group" style="display:flex;gap:5px;">
+                    <input type="text" id="nueva-capa-nombre" placeholder="Nombre de capa" style="flex:1;">
+                    <input type="color" id="nueva-capa-color" value="#3498db" style="width:40px;height:32px;padding:0;border:none;cursor:pointer;">
+                    <button class="tool-btn primary" onclick="crearCapa()" style="padding:5px 10px;margin:0;">+</button>
+                </div>
+                <div id="capas-lista" style="margin-top:10px;"></div>
+            </div>
+            
+            <div class="toolbar-section">
                 <h3>Elementos Agregados</h3>
                 <div id="elementos-lista"></div>
             </div>
@@ -769,6 +779,8 @@
         var medicionLayer = null;
         
         var elementosIniciales = {{ elementos | safe }};
+        var capasIniciales = {{ capas | safe }};
+        var capasEnMapa = [];
         
         var iconosPoliciales = {
             'punto_encuentro': {
@@ -927,7 +939,11 @@
                         dibujarElementoEnMapa(elem);
                         elementosEnMapa.push(elem);
                     });
+                    
+                    capasEnMapa = capasIniciales || [];
+                    actualizarListaCapas();
                     actualizarListaElementos();
+                    actualizarVisibilidadPorCapas();
                     
                     hacerControlPlegable(iframeDoc);
                     
@@ -1474,15 +1490,26 @@
                 var ojoIcono = oculto ? '&#128065;&#8211;' : '&#128065;';
                 var ojoTitle = oculto ? 'Mostrar' : 'Ocultar';
                 var opacidad = oculto ? 'opacity:0.5;' : '';
-                html += '<div class="elemento-item" style="' + opacidad + '">' +
-                    '<span class="elem-nombre" onclick="' + editarFunc + '" title="Click para editar">[' + icono + '] ' + nombre + '</span>' +
-                    '<div class="elem-actions">' +
+                
+                var capaSelect = '<select onchange="asignarCapaElemento(' + elem.id + ', this.value ? parseInt(this.value) : null)" style="font-size:0.7em;padding:2px;border-radius:3px;background:#2c3e50;color:white;border:1px solid #7f8c8d;max-width:60px;">';
+                capaSelect += '<option value="">Sin capa</option>';
+                capasEnMapa.forEach(function(capa) {
+                    var selected = elem.capa === capa.id ? ' selected' : '';
+                    capaSelect += '<option value="' + capa.id + '"' + selected + '>' + capa.nombre + '</option>';
+                });
+                capaSelect += '</select>';
+                
+                html += '<div class="elemento-item" style="' + opacidad + 'flex-wrap:wrap;">' +
+                    '<span class="elem-nombre" onclick="' + editarFunc + '" title="Click para editar" style="flex:1;min-width:100px;">[' + icono + '] ' + nombre + '</span>' +
+                    '<div class="elem-actions" style="display:flex;align-items:center;gap:3px;">' +
+                    capaSelect +
                     '<button class="action-btn visibility-btn" onclick="toggleVisibilidad(' + elem.id + ')" title="' + ojoTitle + '" style="font-size:12px;">' + ojoIcono + '</button>' +
                     '<button class="action-btn edit-btn" onclick="' + editarFunc + '" title="Editar">&#9998;</button>' +
                     '<button class="action-btn delete-btn" onclick="eliminarElemento(' + elem.id + ')" title="Eliminar">X</button>' +
                     '</div></div>';
             });
             lista.innerHTML = html;
+            actualizarListaCapas();
         }
         
         function toggleVisibilidad(id) {
@@ -2019,6 +2046,140 @@
             }
             originalManejarClickMapa(latlng);
         };
+        
+        function crearCapa() {
+            var nombre = document.getElementById('nueva-capa-nombre').value.trim();
+            var color = document.getElementById('nueva-capa-color').value;
+            
+            if (!nombre) {
+                alert('Ingrese un nombre para la capa');
+                return;
+            }
+            
+            fetch('/api/capas', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({nombre: nombre, color: color})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    capasEnMapa.push(data.capa);
+                    actualizarListaCapas();
+                    document.getElementById('nueva-capa-nombre').value = '';
+                    actualizarStatus('Capa creada: ' + nombre);
+                }
+            });
+        }
+        
+        function eliminarCapa(id) {
+            if (!confirm('¿Eliminar esta capa? Los elementos seran desasignados.')) return;
+            
+            fetch('/api/capas/' + id, {method: 'DELETE'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    capasEnMapa = capasEnMapa.filter(c => c.id !== id);
+                    elementosEnMapa.forEach(function(elem) {
+                        if (elem.capa === id) elem.capa = null;
+                    });
+                    actualizarListaCapas();
+                    actualizarListaElementos();
+                    actualizarVisibilidadPorCapas();
+                    actualizarStatus('Capa eliminada');
+                }
+            });
+        }
+        
+        function toggleCapaVisibilidad(id) {
+            var capa = capasEnMapa.find(c => c.id === id);
+            if (!capa) return;
+            
+            capa.visible = !capa.visible;
+            
+            fetch('/api/capas/' + id, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({visible: capa.visible})
+            })
+            .then(response => response.json())
+            .then(data => {
+                actualizarListaCapas();
+                actualizarVisibilidadPorCapas();
+            });
+        }
+        
+        function actualizarVisibilidadPorCapas() {
+            elementosEnMapa.forEach(function(elem) {
+                var capaId = elem.capa;
+                var capa = capaId ? capasEnMapa.find(c => c.id === capaId) : null;
+                var capaVisible = capa ? capa.visible : true;
+                var debeSerVisible = capaVisible && !elem._oculto;
+                
+                var tieneLayerEnMapa = (elem._layer && elementosLayer.hasLayer(elem._layer)) || 
+                                        (elem._marker && elementosLayer.hasLayer(elem._marker));
+                
+                if (!debeSerVisible && tieneLayerEnMapa) {
+                    if (elem._sectores) {
+                        elem._sectores.forEach(function(layer) {
+                            if (elementosLayer.hasLayer(layer)) {
+                                elementosLayer.removeLayer(layer);
+                            }
+                        });
+                    }
+                    if (elem._layer && elementosLayer.hasLayer(elem._layer)) {
+                        elementosLayer.removeLayer(elem._layer);
+                    }
+                    if (elem._marker && elementosLayer.hasLayer(elem._marker)) {
+                        elementosLayer.removeLayer(elem._marker);
+                    }
+                } else if (debeSerVisible && !tieneLayerEnMapa) {
+                    dibujarElementoEnMapa(elem);
+                }
+            });
+        }
+        
+        function asignarCapaElemento(elemId, capaId) {
+            fetch('/api/elemento/' + elemId + '/capa', {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({capa_id: capaId || null})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    var elem = elementosEnMapa.find(e => e.id === elemId);
+                    if (elem) {
+                        elem.capa = capaId || null;
+                    }
+                    actualizarListaElementos();
+                    actualizarVisibilidadPorCapas();
+                    actualizarStatus('Elemento asignado a capa');
+                }
+            });
+        }
+        
+        function actualizarListaCapas() {
+            var lista = document.getElementById('capas-lista');
+            if (capasEnMapa.length === 0) {
+                lista.innerHTML = '<div style="padding:10px;text-align:center;color:#7f8c8d;font-size:0.85em;">Sin capas creadas</div>';
+                return;
+            }
+            
+            var html = '';
+            capasEnMapa.forEach(function(capa) {
+                var ojoIcono = capa.visible ? '&#128065;' : '&#128065;&#8211;';
+                var opacidad = capa.visible ? '' : 'opacity:0.5;';
+                var elemCount = elementosEnMapa.filter(e => e.capa === capa.id).length;
+                html += '<div style="display:flex;align-items:center;gap:5px;padding:6px;margin:3px 0;background:#34495e;border-radius:4px;border-left:3px solid ' + capa.color + ';' + opacidad + '">' +
+                    '<button onclick="toggleCapaVisibilidad(' + capa.id + ')" style="background:none;border:none;color:white;cursor:pointer;font-size:14px;" title="Mostrar/Ocultar">' + ojoIcono + '</button>' +
+                    '<span style="flex:1;font-size:0.85em;">' + capa.nombre + ' (' + elemCount + ')</span>' +
+                    '<button onclick="eliminarCapa(' + capa.id + ')" style="background:#e74c3c;border:none;color:white;width:20px;height:20px;border-radius:3px;cursor:pointer;font-size:0.7em;">X</button>' +
+                    '</div>';
+            });
+            lista.innerHTML = html;
+        }
+        
     </script>
 </body>
 </html>

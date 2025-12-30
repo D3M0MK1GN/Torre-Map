@@ -6212,5 +6212,71 @@
     "descripcion": "",
     "color": "#3388ff",
     "icono": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAACKklEQVR4AayRO2gUURSGv5lsBC0kuotoihQJIoiNBFTEF9aigahVAopCYmFAbLSxE2xsBNkELMRHoUFQK0GLREG0CIoEQsAEH4ggu0EsFMzujOe/mRl3diYhgQznn8s9/+Oemeuzys+igaVz4dHiQHh340A4Y5iPMKOeuMXmyASWzobdxcFwLAh4EkKfGTsNhQid6omTRlrrpyoVqJODFt6EIQdTqpyNNNLK00gngTrNTn5kpKaxZVlVkEfeWJ0EhgWuWzMJ278NJq9BdXgBlTJ8NMXVE6ZKVyHyuq4L1Nj6BNdpev38DY8n4NkHaG2B/n1wpumHyKsMWX29woDsuSIMf/7C7ZfQZxO+/4wL3bTeiKaKM3z17eb2al0Kh7dDRwnm6/DjV1YZZ7hAozsMubWlzT75AowOQfsGeDEJD97mSl1GHJirUFPTXH4IQ3fg3Sc4shOu9IjJRxz4JZ+GegBT3+D+axifWthv3Zyrdhku0AOT54pYuwZOHYDyaejdhbuUr3NZbZzhi/J8RrXmoW0d9HTDyd32D+1/jtmUN59nlXGGC6yUvaeex3ij7NU07LgExcH/aD8Px2/A9PdGJcirDOxxgbbi1bhoa82w0qpFXudLAiu3vAnfp9e6KwmtySOv+VwlgdppbL/OHn2C9ktBGmnladSlAkXotOqwd8hOPmY3dw+YNWhqYVY9cdJIa1yqMoExq5OrI17/3IjXZWiN0KWeuFjXvP4DAAD//80LnNwAAAAGSURBVAMAgnXCKRh2ksUAAAAASUVORK5CYII="
+  },
+  {
+    "id": 23,
+    "tipo": "torre",
+    "lat": 9.929528,
+    "lon": -69.608333,
+    "radio": 6000,
+    "color": "#17f018",
+    "grosor": 1,
+    "nombre": "MOVISTAR SAN ANTONIO-1141562",
+    "capa": 2
+  },
+  {
+    "id": 24,
+    "tipo": "torre",
+    "lat": 9.925,
+    "lon": -69.623,
+    "radio": 6000,
+    "color": "#ff0000",
+    "grosor": 1,
+    "nombre": "Digitel San Antonio-60188",
+    "capa": 2
+  },
+  {
+    "id": 25,
+    "tipo": "torre",
+    "lat": 9.789872876453932,
+    "lon": -69.58537147714948,
+    "radio": 10000,
+    "color": "#1c71d8",
+    "grosor": 1,
+    "nombre": "Movilnet San Antonio-734F060101910085 (734F060707733076)",
+    "capa": 2
+  },
+  {
+    "id": 26,
+    "tipo": "torre",
+    "lat": 9.756528,
+    "lon": -69.62425,
+    "radio": 5000,
+    "color": "#f5c211",
+    "grosor": 1,
+    "nombre": "Movilnet Sector Santa Ana(Entrada-Salida)-734F060707733079",
+    "capa": 3
+  },
+  {
+    "id": 27,
+    "tipo": "torre",
+    "lat": 9.761098678810297,
+    "lon": -69.65180697930401,
+    "radio": 2000,
+    "color": "#ff0000",
+    "grosor": 1,
+    "nombre": "Movistar(Digitel) Sector Santa Ana(SITIO-DESTACAMENTOS)-63688",
+    "capa": 3
+  },
+  {
+    "id": 28,
+    "tipo": "torre",
+    "lat": 9.744330669646375,
+    "lon": -69.65899195377656,
+    "radio": 2000,
+    "color": "#1fb907",
+    "grosor": 1,
+    "nombre": "Movistar Sector San Ana (Entrada/Salida)-11443491",
+    "capa": 3
   }
 ]
